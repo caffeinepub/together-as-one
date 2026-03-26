@@ -118,6 +118,13 @@ export interface Loan {
     timestamp: bigint;
     amount: bigint;
 }
+export interface DepositRequest {
+    id: string;
+    status: DepositStatus;
+    userId: string;
+    timestamp: bigint;
+    amount: bigint;
+}
 export interface UserProfile {
     id: string;
     name: string;
@@ -138,6 +145,11 @@ export enum LoanStatus {
     approved = "approved",
     rejected = "rejected"
 }
+export enum DepositStatus {
+    pending = "pending",
+    approved = "approved",
+    rejected = "rejected"
+}
 export enum UserRole {
     admin = "admin",
     user = "user",
@@ -145,36 +157,78 @@ export enum UserRole {
 }
 export interface backendInterface {
     _initializeAccessControlWithSecret(userSecret: string): Promise<void>;
-    addMember(name: string, email: string, password: string): Promise<{
+    addMember(adminId: string, name: string, email: string, password: string): Promise<{
         __kind__: "ok";
         ok: User;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    approveLoan(loanId: string): Promise<{
+    approveLoan(adminId: string, loanId: string): Promise<{
         __kind__: "ok";
         ok: Loan;
     } | {
         __kind__: "err";
         err: string;
     }>;
+    approveDeposit(adminId: string, depositId: string): Promise<{
+        __kind__: "ok";
+        ok: DepositRequest;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    rejectDeposit(adminId: string, depositId: string): Promise<{
+        __kind__: "ok";
+        ok: DepositRequest;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    requestDeposit(userId: string, amount: bigint): Promise<{
+        __kind__: "ok";
+        ok: DepositRequest;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    getAllPendingDeposits(adminId: string): Promise<{
+        __kind__: "ok";
+        ok: Array<DepositRequest>;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    getMyDepositRequests(userId: string): Promise<{
+        __kind__: "ok";
+        ok: Array<DepositRequest>;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
-    deposit(userId: string, amount: bigint): Promise<{
+    deposit(adminId: string, userId: string, amount: bigint): Promise<{
         __kind__: "ok";
         ok: bigint;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    getAllMembers(): Promise<{
+    adminDeposit(adminId: string, memberId: string, amount: bigint): Promise<{
+        __kind__: "ok";
+        ok: bigint;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    getAllMembers(adminId: string): Promise<{
         __kind__: "ok";
         ok: Array<MemberSummary>;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    getAllPendingLoans(): Promise<{
+    getAllPendingLoans(adminId: string): Promise<{
         __kind__: "ok";
         ok: Array<Loan>;
     } | {
@@ -183,7 +237,7 @@ export interface backendInterface {
     }>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
-    getMemberDetail(userId: string): Promise<{
+    getMemberDetail(adminId: string, userId: string): Promise<{
         __kind__: "ok";
         ok: MemberDetail;
     } | {
@@ -211,7 +265,7 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
-    getTotalSavings(): Promise<{
+    getTotalSavings(adminId: string): Promise<{
         __kind__: "ok";
         ok: bigint;
     } | {
@@ -227,7 +281,7 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
-    markLoanPaid(loanId: string): Promise<{
+    markLoanPaid(adminId: string, loanId: string): Promise<{
         __kind__: "ok";
         ok: Loan;
     } | {
@@ -241,14 +295,14 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
-    rejectLoan(loanId: string): Promise<{
+    rejectLoan(adminId: string, loanId: string): Promise<{
         __kind__: "ok";
         ok: Loan;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    removeMember(userId: string): Promise<{
+    removeMember(adminId: string, userId: string): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
@@ -262,7 +316,7 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
-    resetMember(userId: string): Promise<{
+    resetMember(adminId: string, userId: string): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
@@ -271,7 +325,7 @@ export interface backendInterface {
     }>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
 }
-import type { Loan as _Loan, LoanStatus as _LoanStatus, MemberDetail as _MemberDetail, MemberSummary as _MemberSummary, Transaction as _Transaction, User as _User, UserProfile as _UserProfile, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
+import type { DepositRequest as _DepositRequest, DepositStatus as _DepositStatus, Loan as _Loan, LoanStatus as _LoanStatus, MemberDetail as _MemberDetail, MemberSummary as _MemberSummary, Transaction as _Transaction, User as _User, UserProfile as _UserProfile, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
     async _initializeAccessControlWithSecret(arg0: string): Promise<void> {
@@ -288,7 +342,7 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async addMember(arg0: string, arg1: string, arg2: string): Promise<{
+    async addMember(arg0: string, arg1: string, arg2: string, arg3: string): Promise<{
         __kind__: "ok";
         ok: User;
     } | {
@@ -297,18 +351,18 @@ export class Backend implements backendInterface {
     }> {
         if (this.processError) {
             try {
-                const result = await this.actor.addMember(arg0, arg1, arg2);
+                const result = await this.actor.addMember(arg0, arg1, arg2, arg3);
                 return from_candid_variant_n1(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.addMember(arg0, arg1, arg2);
+            const result = await this.actor.addMember(arg0, arg1, arg2, arg3);
             return from_candid_variant_n1(this._uploadFile, this._downloadFile, result);
         }
     }
-    async approveLoan(arg0: string): Promise<{
+    async approveLoan(arg0: string, arg1: string): Promise<{
         __kind__: "ok";
         ok: Loan;
     } | {
@@ -317,15 +371,115 @@ export class Backend implements backendInterface {
     }> {
         if (this.processError) {
             try {
-                const result = await this.actor.approveLoan(arg0);
+                const result = await this.actor.approveLoan(arg0, arg1);
                 return from_candid_variant_n2(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.approveLoan(arg0);
+            const result = await this.actor.approveLoan(arg0, arg1);
             return from_candid_variant_n2(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async approveDeposit(arg0: string, arg1: string): Promise<{
+        __kind__: "ok";
+        ok: DepositRequest;
+    } | {
+        __kind__: "err";
+        err: string;
+    }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.approveDeposit(arg0, arg1);
+                return "ok" in result ? { __kind__: "ok", ok: from_candid_DepositRequest(result.ok) } : { __kind__: "err", err: result.err };
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.approveDeposit(arg0, arg1);
+            return "ok" in result ? { __kind__: "ok", ok: from_candid_DepositRequest(result.ok) } : { __kind__: "err", err: result.err };
+        }
+    }
+    async rejectDeposit(arg0: string, arg1: string): Promise<{
+        __kind__: "ok";
+        ok: DepositRequest;
+    } | {
+        __kind__: "err";
+        err: string;
+    }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.rejectDeposit(arg0, arg1);
+                return "ok" in result ? { __kind__: "ok", ok: from_candid_DepositRequest(result.ok) } : { __kind__: "err", err: result.err };
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.rejectDeposit(arg0, arg1);
+            return "ok" in result ? { __kind__: "ok", ok: from_candid_DepositRequest(result.ok) } : { __kind__: "err", err: result.err };
+        }
+    }
+    async requestDeposit(arg0: string, arg1: bigint): Promise<{
+        __kind__: "ok";
+        ok: DepositRequest;
+    } | {
+        __kind__: "err";
+        err: string;
+    }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.requestDeposit(arg0, arg1);
+                return "ok" in result ? { __kind__: "ok", ok: from_candid_DepositRequest(result.ok) } : { __kind__: "err", err: result.err };
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.requestDeposit(arg0, arg1);
+            return "ok" in result ? { __kind__: "ok", ok: from_candid_DepositRequest(result.ok) } : { __kind__: "err", err: result.err };
+        }
+    }
+    async getAllPendingDeposits(arg0: string): Promise<{
+        __kind__: "ok";
+        ok: Array<DepositRequest>;
+    } | {
+        __kind__: "err";
+        err: string;
+    }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getAllPendingDeposits(arg0);
+                return "ok" in result ? { __kind__: "ok", ok: result.ok.map(from_candid_DepositRequest) } : { __kind__: "err", err: result.err };
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getAllPendingDeposits(arg0);
+            return "ok" in result ? { __kind__: "ok", ok: result.ok.map(from_candid_DepositRequest) } : { __kind__: "err", err: result.err };
+        }
+    }
+    async getMyDepositRequests(arg0: string): Promise<{
+        __kind__: "ok";
+        ok: Array<DepositRequest>;
+    } | {
+        __kind__: "err";
+        err: string;
+    }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getMyDepositRequests(arg0);
+                return "ok" in result ? { __kind__: "ok", ok: result.ok.map(from_candid_DepositRequest) } : { __kind__: "err", err: result.err };
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getMyDepositRequests(arg0);
+            return "ok" in result ? { __kind__: "ok", ok: result.ok.map(from_candid_DepositRequest) } : { __kind__: "err", err: result.err };
         }
     }
     async assignCallerUserRole(arg0: Principal, arg1: UserRole): Promise<void> {
@@ -342,7 +496,7 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async deposit(arg0: string, arg1: bigint): Promise<{
+    async deposit(arg0: string, arg1: string, arg2: bigint): Promise<{
         __kind__: "ok";
         ok: bigint;
     } | {
@@ -351,18 +505,38 @@ export class Backend implements backendInterface {
     }> {
         if (this.processError) {
             try {
-                const result = await this.actor.deposit(arg0, arg1);
+                const result = await this.actor.deposit(arg0, arg1, arg2);
                 return from_candid_variant_n9(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.deposit(arg0, arg1);
+            const result = await this.actor.deposit(arg0, arg1, arg2);
             return from_candid_variant_n9(this._uploadFile, this._downloadFile, result);
         }
     }
-    async getAllMembers(): Promise<{
+    async adminDeposit(arg0: string, arg1: string, arg2: bigint): Promise<{
+        __kind__: "ok";
+        ok: bigint;
+    } | {
+        __kind__: "err";
+        err: string;
+    }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.adminDeposit(arg0, arg1, arg2);
+                return from_candid_variant_n9(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.adminDeposit(arg0, arg1, arg2);
+            return from_candid_variant_n9(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async getAllMembers(arg0: string): Promise<{
         __kind__: "ok";
         ok: Array<MemberSummary>;
     } | {
@@ -371,18 +545,18 @@ export class Backend implements backendInterface {
     }> {
         if (this.processError) {
             try {
-                const result = await this.actor.getAllMembers();
+                const result = await this.actor.getAllMembers(arg0);
                 return from_candid_variant_n10(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.getAllMembers();
+            const result = await this.actor.getAllMembers(arg0);
             return from_candid_variant_n10(this._uploadFile, this._downloadFile, result);
         }
     }
-    async getAllPendingLoans(): Promise<{
+    async getAllPendingLoans(arg0: string): Promise<{
         __kind__: "ok";
         ok: Array<Loan>;
     } | {
@@ -391,14 +565,14 @@ export class Backend implements backendInterface {
     }> {
         if (this.processError) {
             try {
-                const result = await this.actor.getAllPendingLoans();
+                const result = await this.actor.getAllPendingLoans(arg0);
                 return from_candid_variant_n11(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.getAllPendingLoans();
+            const result = await this.actor.getAllPendingLoans(arg0);
             return from_candid_variant_n11(this._uploadFile, this._downloadFile, result);
         }
     }
@@ -430,7 +604,7 @@ export class Backend implements backendInterface {
             return from_candid_UserRole_n14(this._uploadFile, this._downloadFile, result);
         }
     }
-    async getMemberDetail(arg0: string): Promise<{
+    async getMemberDetail(arg0: string, arg1: string): Promise<{
         __kind__: "ok";
         ok: MemberDetail;
     } | {
@@ -439,14 +613,14 @@ export class Backend implements backendInterface {
     }> {
         if (this.processError) {
             try {
-                const result = await this.actor.getMemberDetail(arg0);
+                const result = await this.actor.getMemberDetail(arg0, arg1);
                 return from_candid_variant_n16(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.getMemberDetail(arg0);
+            const result = await this.actor.getMemberDetail(arg0, arg1);
             return from_candid_variant_n16(this._uploadFile, this._downloadFile, result);
         }
     }
@@ -510,7 +684,7 @@ export class Backend implements backendInterface {
             return from_candid_variant_n19(this._uploadFile, this._downloadFile, result);
         }
     }
-    async getTotalSavings(): Promise<{
+    async getTotalSavings(arg0: string): Promise<{
         __kind__: "ok";
         ok: bigint;
     } | {
@@ -519,14 +693,14 @@ export class Backend implements backendInterface {
     }> {
         if (this.processError) {
             try {
-                const result = await this.actor.getTotalSavings();
+                const result = await this.actor.getTotalSavings(arg0);
                 return from_candid_variant_n9(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.getTotalSavings();
+            const result = await this.actor.getTotalSavings(arg0);
             return from_candid_variant_n9(this._uploadFile, this._downloadFile, result);
         }
     }
@@ -578,7 +752,7 @@ export class Backend implements backendInterface {
             return from_candid_variant_n1(this._uploadFile, this._downloadFile, result);
         }
     }
-    async markLoanPaid(arg0: string): Promise<{
+    async markLoanPaid(arg0: string, arg1: string): Promise<{
         __kind__: "ok";
         ok: Loan;
     } | {
@@ -587,14 +761,14 @@ export class Backend implements backendInterface {
     }> {
         if (this.processError) {
             try {
-                const result = await this.actor.markLoanPaid(arg0);
+                const result = await this.actor.markLoanPaid(arg0, arg1);
                 return from_candid_variant_n2(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.markLoanPaid(arg0);
+            const result = await this.actor.markLoanPaid(arg0, arg1);
             return from_candid_variant_n2(this._uploadFile, this._downloadFile, result);
         }
     }
@@ -618,7 +792,7 @@ export class Backend implements backendInterface {
             return from_candid_variant_n1(this._uploadFile, this._downloadFile, result);
         }
     }
-    async rejectLoan(arg0: string): Promise<{
+    async rejectLoan(arg0: string, arg1: string): Promise<{
         __kind__: "ok";
         ok: Loan;
     } | {
@@ -627,18 +801,18 @@ export class Backend implements backendInterface {
     }> {
         if (this.processError) {
             try {
-                const result = await this.actor.rejectLoan(arg0);
+                const result = await this.actor.rejectLoan(arg0, arg1);
                 return from_candid_variant_n2(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.rejectLoan(arg0);
+            const result = await this.actor.rejectLoan(arg0, arg1);
             return from_candid_variant_n2(this._uploadFile, this._downloadFile, result);
         }
     }
-    async removeMember(arg0: string): Promise<{
+    async removeMember(arg0: string, arg1: string): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
@@ -647,14 +821,14 @@ export class Backend implements backendInterface {
     }> {
         if (this.processError) {
             try {
-                const result = await this.actor.removeMember(arg0);
+                const result = await this.actor.removeMember(arg0, arg1);
                 return from_candid_variant_n20(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.removeMember(arg0);
+            const result = await this.actor.removeMember(arg0, arg1);
             return from_candid_variant_n20(this._uploadFile, this._downloadFile, result);
         }
     }
@@ -678,7 +852,7 @@ export class Backend implements backendInterface {
             return from_candid_variant_n2(this._uploadFile, this._downloadFile, result);
         }
     }
-    async resetMember(arg0: string): Promise<{
+    async resetMember(arg0: string, arg1: string): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
@@ -687,14 +861,14 @@ export class Backend implements backendInterface {
     }> {
         if (this.processError) {
             try {
-                const result = await this.actor.resetMember(arg0);
+                const result = await this.actor.resetMember(arg0, arg1);
                 return from_candid_variant_n20(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.resetMember(arg0);
+            const result = await this.actor.resetMember(arg0, arg1);
             return from_candid_variant_n20(this._uploadFile, this._downloadFile, result);
         }
     }
@@ -712,6 +886,15 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+}
+function from_candid_DepositRequest(value: _DepositRequest): DepositRequest {
+    return {
+        id: value.id,
+        status: "pending" in value.status ? DepositStatus.pending : "approved" in value.status ? DepositStatus.approved : DepositStatus.rejected,
+        userId: value.userId,
+        timestamp: value.timestamp,
+        amount: value.amount,
+    };
 }
 function from_candid_LoanStatus_n5(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _LoanStatus): LoanStatus {
     return from_candid_variant_n6(_uploadFile, _downloadFile, value);
