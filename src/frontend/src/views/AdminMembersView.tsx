@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   ChevronRight,
   Loader2,
+  PiggyBank,
   RefreshCw,
   Trash2,
   UserPlus,
@@ -23,6 +24,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import {
   useAddMember,
+  useAdminDeposit,
   useGetAllMembers,
   useRemoveMember,
 } from "../hooks/useQueries";
@@ -43,6 +45,7 @@ export function AdminMembersView({ onBack, onManageMember }: Props) {
   } = useGetAllMembers();
   const addMutation = useAddMember();
   const removeMutation = useRemoveMember();
+  const depositMutation = useAdminDeposit();
   const qc = useQueryClient();
 
   const [addOpen, setAddOpen] = useState(false);
@@ -50,6 +53,12 @@ export function AdminMembersView({ onBack, onManageMember }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [removingId, setRemovingId] = useState<string | null>(null);
+
+  // Quick add savings dialog
+  const [savingsOpen, setSavingsOpen] = useState(false);
+  const [savingsMemberId, setSavingsMemberId] = useState<string | null>(null);
+  const [savingsMemberName, setSavingsMemberName] = useState("");
+  const [savingsAmount, setSavingsAmount] = useState("");
 
   const handleRefresh = async () => {
     await qc.invalidateQueries({ queryKey: ["members"] });
@@ -82,6 +91,32 @@ export function AdminMembersView({ onBack, onManageMember }: Props) {
       toast.error(e.message ?? "Failed to remove member");
     } finally {
       setRemovingId(null);
+    }
+  };
+
+  const openSavingsDialog = (memberId: string, memberName: string) => {
+    setSavingsMemberId(memberId);
+    setSavingsMemberName(memberName);
+    setSavingsAmount("");
+    setSavingsOpen(true);
+  };
+
+  const handleAddSavings = async () => {
+    const amt = Number(savingsAmount);
+    if (!savingsMemberId || !savingsAmount || Number.isNaN(amt) || amt <= 0) {
+      toast.error("Enter a valid amount");
+      return;
+    }
+    try {
+      await depositMutation.mutateAsync({
+        memberId: savingsMemberId,
+        amount: BigInt(amt),
+      });
+      toast.success("Savings added!");
+      setSavingsOpen(false);
+      await qc.invalidateQueries({ queryKey: ["members"] });
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to add savings");
     }
   };
 
@@ -200,6 +235,16 @@ export function AdminMembersView({ onBack, onManageMember }: Props) {
                     <Button
                       variant="ghost"
                       size="sm"
+                      className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                      onClick={() => openSavingsDialog(m.id, m.name)}
+                      title="Add Savings"
+                      data-ocid={`admin_members.edit_button.${i + 1}`}
+                    >
+                      <PiggyBank className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
                       onClick={() => onManageMember(m.id)}
                       data-ocid="admin_members.edit_button"
@@ -289,6 +334,62 @@ export function AdminMembersView({ onBack, onManageMember }: Props) {
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
                 ) : null}
                 Add Member
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Add Savings Dialog */}
+      <Dialog open={savingsOpen} onOpenChange={setSavingsOpen}>
+        <DialogContent
+          className="max-w-[90vw] rounded-2xl"
+          data-ocid="admin_members.dialog"
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PiggyBank className="w-5 h-5 text-emerald-600" />
+              Add Savings
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-1">
+            Adding savings for{" "}
+            <span className="font-semibold text-foreground">
+              {savingsMemberName}
+            </span>
+          </p>
+          <div className="space-y-3 pt-1">
+            <div>
+              <Label>Amount (KES)</Label>
+              <Input
+                type="number"
+                value={savingsAmount}
+                onChange={(e) => setSavingsAmount(e.target.value)}
+                placeholder="e.g. 1000"
+                className="mt-1"
+                min="1"
+                data-ocid="admin_members.input"
+              />
+            </div>
+            <div className="flex gap-3 pt-1">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setSavingsOpen(false)}
+                data-ocid="admin_members.cancel_button"
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={handleAddSavings}
+                disabled={depositMutation.isPending}
+                data-ocid="admin_members.confirm_button"
+              >
+                {depositMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : null}
+                Add Savings
               </Button>
             </div>
           </div>

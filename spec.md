@@ -1,40 +1,27 @@
-# Sultantech
+# TogetherAsOne
 
 ## Current State
-The auto-generated `backend.ts` file is out of sync with the actual Motoko backend (`main.mo`). Every admin function in the Motoko backend takes `adminUserId: Text` as its first argument (e.g. `getAllMembers(adminUserId)`, `addMember(adminUserId, name, email, password)`) but the `Backend` class in `backend.ts` was generated when those functions had no adminId parameter. As a result:
-- Admin functions silently drop the adminId passed by `useQueries.ts` (cast via `as any`)
-- The underlying Candid actor call has too few arguments, causing "too few arguments" / "Unauthorized" errors
-- Deposit-related functions (`approveDeposit`, `rejectDeposit`, `getAllPendingDeposits`, `getMyDepositRequests`, `requestDeposit`, `adminDeposit`) are missing entirely from `backend.ts`
-- Admin login appears to fail because after login, dashboard data calls all fail
+The app has savings groups management with login/registration, admin and member dashboards, deposit requests (pending/approve/reject), loan requests (pending/approve/reject/paid), push notifications, M-Pesa payment simulation, PDF constitution download, and PWA install support.
 
 ## Requested Changes (Diff)
 
 ### Add
-- `DepositRequest` and `DepositStatus` types to `backend.ts`
-- Missing methods to `Backend` class: `adminDeposit`, `approveDeposit`, `rejectDeposit`, `getAllPendingDeposits`, `getMyDepositRequests`, `requestDeposit`
-- Candid conversion helpers for DepositRequest/DepositStatus in `backend.ts`
+- **Loan Repayment Tracking**: Members can make partial payments toward approved loans. Backend tracks each payment, calculates remaining balance. Loan auto-marked as paid when balance hits zero.
+- **Withdrawal Requests**: Members can request to withdraw savings. Admin approves (deducts savings) or rejects. Flow mirrors deposit requests.
+- **Monthly Contribution Schedule**: Admin can set a monthly contribution target amount. Admin records monthly contributions per member. Admin sees a summary of who has paid each month. Members see their contribution history.
 
 ### Modify
-- `backend.ts` Backend class: fix all admin methods to accept and pass adminId as first arg:
-  - `addMember(adminId, name, email, password)` -> calls `this.actor.addMember(adminId, name, email, password)`
-  - `approveLoan(adminId, loanId)` -> calls `this.actor.approveLoan(adminId, loanId)`
-  - `deposit(adminId, userId, amount)` -> calls `this.actor.deposit(adminId, userId, amount)`
-  - `getAllMembers(adminId)` -> calls `this.actor.getAllMembers(adminId)`
-  - `getAllPendingLoans(adminId)` -> calls `this.actor.getAllPendingLoans(adminId)`
-  - `getMemberDetail(adminId, userId)` -> calls `this.actor.getMemberDetail(adminId, userId)`
-  - `getTotalSavings(adminId)` -> calls `this.actor.getTotalSavings(adminId)`
-  - `markLoanPaid(adminId, loanId)` -> calls `this.actor.markLoanPaid(adminId, loanId)`
-  - `rejectLoan(adminId, loanId)` -> calls `this.actor.rejectLoan(adminId, loanId)`
-  - `removeMember(adminId, userId)` -> calls `this.actor.removeMember(adminId, userId)`
-  - `resetMember(adminId, userId)` -> calls `this.actor.resetMember(adminId, userId)`
+- Admin Member Detail view: add loan repayment section showing payments made and remaining balance.
+- Admin dashboard: add withdrawal requests pending count and tab.
+- Member dashboard: add withdrawal request button and monthly contribution status.
+- MyLoans view: show remaining balance and repayment button for approved loans.
 
 ### Remove
-- Nothing
+- Nothing removed.
 
 ## Implementation Plan
-1. Update `src/frontend/src/backend.ts`:
-   - Add `DepositStatus` enum and `DepositRequest` interface
-   - Fix all Backend class method signatures to include adminId where needed
-   - Add all missing deposit-related Backend methods
-   - Add from_candid conversion helpers for DepositRequest/DepositStatus
-2. Validate build
+1. Update `main.mo`: add `LoanPayment`, `WithdrawalRequest`, `MonthlyContribution` types and stable storage. Add functions: `makeRepayment`, `getLoanPayments`, `requestWithdrawal`, `approveWithdrawal`, `rejectWithdrawal`, `getAllPendingWithdrawals`, `getMyWithdrawalRequests`, `setMonthlyContributionAmount`, `getMonthlyContributionAmount`, `recordContribution`, `getContributionSummary`, `getMyContributions`.
+2. Update `backend.d.ts` and `backend.ts` with new types and methods.
+3. Add frontend views: `WithdrawView.tsx`, `MonthlyContributionsView.tsx`, `AdminWithdrawalsView.tsx`, `AdminContributionsView.tsx`.
+4. Update existing views to show repayment UI, withdrawal button, contribution status.
+5. Update `useQueries.ts` with new hooks.

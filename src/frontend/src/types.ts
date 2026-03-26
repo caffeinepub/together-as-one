@@ -4,11 +4,15 @@ export type ViewType =
   | "member-dashboard"
   | "transactions"
   | "my-loans"
+  | "my-withdrawals"
+  | "my-contributions"
   | "admin-dashboard"
   | "admin-members"
   | "admin-member-detail"
   | "admin-pending-loans"
-  | "admin-pending-deposits";
+  | "admin-pending-deposits"
+  | "admin-pending-withdrawals"
+  | "admin-contributions";
 
 export interface StoredUser {
   id: string;
@@ -42,5 +46,11 @@ export function formatDateTime(timestamp: bigint): string {
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+  });
+}
+
+export function getMonthName(month: number): string {
+  return new Date(2024, month - 1, 1).toLocaleString("en-KE", {
+    month: "long",
   });
 }

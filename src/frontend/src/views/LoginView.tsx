@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Cpu, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { User } from "../backend.d";
@@ -26,7 +26,7 @@ function userToStored(u: User): StoredUser {
 }
 
 export function LoginView({ onLogin, onNavigate }: Props) {
-  const { actor } = useActor();
+  const { actor, isFetching: actorLoading } = useActor();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -34,7 +34,9 @@ export function LoginView({ onLogin, onNavigate }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!actor) {
-      toast.error("Connecting to server...");
+      toast.error(
+        "Still connecting to server, please wait a moment and try again.",
+      );
       return;
     }
     setLoading(true);
@@ -46,8 +48,9 @@ export function LoginView({ onLogin, onNavigate }: Props) {
       } else {
         toast.error(res.err);
       }
-    } catch {
-      toast.error("Login failed. Please try again.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(msg || "Login failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -62,15 +65,19 @@ export function LoginView({ onLogin, onNavigate }: Props) {
             "linear-gradient(135deg, #0B4A37 0%, #1a6b52 60%, #C6A24D 100%)",
         }}
       >
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-            <Cpu className="w-5 h-5 text-white" />
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center overflow-hidden">
+            <img
+              src="/assets/generated/together-icon-transparent.dim_512x512.png"
+              alt="TogetherAsOne"
+              className="w-8 h-8 object-contain"
+            />
           </div>
-          <span className="text-xl font-bold tracking-tight">Sultantech</span>
+          <span className="text-xl font-bold tracking-tight">
+            TogetherAsOne
+          </span>
         </div>
-        <p className="text-white/80 text-sm italic mt-1">
-          "World of Technology"
-        </p>
+        <p className="text-white/80 text-sm italic mt-1">"Unity is Strength"</p>
         <p className="text-white/60 text-xs mt-4">Savings Group Management</p>
       </div>
 
@@ -112,13 +119,17 @@ export function LoginView({ onLogin, onNavigate }: Props) {
               <Button
                 type="submit"
                 className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-semibold py-2.5"
-                disabled={loading}
+                disabled={loading || actorLoading || !actor}
                 data-ocid="login.submit_button"
               >
-                {loading ? (
+                {loading || actorLoading ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 ) : null}
-                {loading ? "Signing in..." : "Sign In"}
+                {loading
+                  ? "Signing in..."
+                  : actorLoading
+                    ? "Connecting..."
+                    : "Sign In"}
               </Button>
             </form>
 
@@ -137,7 +148,12 @@ export function LoginView({ onLogin, onNavigate }: Props) {
         </Card>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
-          Admin? Use <span className="font-mono text-xs">admin@gmail.com</span>
+          Admin? Use{" "}
+          <span className="font-mono text-xs font-semibold">
+            admin@gmail.com
+          </span>
+          {" / "}
+          <span className="font-mono text-xs font-semibold">admin123</span>
         </p>
       </div>
 

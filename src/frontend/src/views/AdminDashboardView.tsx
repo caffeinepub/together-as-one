@@ -1,10 +1,11 @@
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   ArrowDownCircle,
   Bell,
   ChevronRight,
   Clock,
-  Cpu,
+  Download,
   FileText,
   LogOut,
   TrendingUp,
@@ -36,10 +37,26 @@ export function AdminDashboardView({ user, onLogout, onNavigate }: Props) {
 
   const [notifOpen, setNotifOpen] = useState(false);
   const { unreadCount, requestPermission } = useNotifications(user.id);
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
 
   useEffect(() => {
     requestPermission();
   }, [requestPermission]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    setInstallPrompt(null);
+  };
 
   const stats = [
     {
@@ -76,8 +93,12 @@ export function AdminDashboardView({ user, onLogout, onNavigate }: Props) {
     <div className="min-h-screen flex flex-col" data-ocid="admin.page">
       <header className="bg-card border-b px-4 py-3 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-2">
-          <Cpu className="w-5 h-5 text-primary" />
-          <span className="font-bold text-sm text-primary">Sultantech</span>
+          <img
+            src="/assets/generated/together-icon-transparent.dim_512x512.png"
+            alt="TogetherAsOne"
+            className="w-6 h-6 object-contain"
+          />
+          <span className="font-bold text-sm text-primary">TogetherAsOne</span>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -239,6 +260,44 @@ export function AdminDashboardView({ user, onLogout, onNavigate }: Props) {
         open={notifOpen}
         onClose={() => setNotifOpen(false)}
       />
+
+      {/* PWA Install Banner */}
+      {installPrompt && (
+        <div className="fixed bottom-16 left-4 right-4 z-50">
+          <div
+            className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-lg"
+            style={{
+              background: "linear-gradient(to right, #0B4A37, #1a6b52)",
+            }}
+          >
+            <Download className="w-5 h-5 text-white shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-white text-xs font-semibold">
+                Install TogetherAsOne
+              </p>
+              <p className="text-white/70 text-[11px]">
+                Add to your home screen
+              </p>
+            </div>
+            <Button
+              size="sm"
+              onClick={handleInstall}
+              className="h-8 text-xs bg-white text-primary hover:bg-white/90 font-semibold shrink-0"
+              data-ocid="admin.primary_button"
+            >
+              Install
+            </Button>
+            <button
+              type="button"
+              onClick={() => setInstallPrompt(null)}
+              className="text-white/60 hover:text-white text-lg leading-none shrink-0"
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
 
       <footer className="text-center py-3 text-xs text-muted-foreground">
         © {new Date().getFullYear()}. Built with ❤️ using{" "}

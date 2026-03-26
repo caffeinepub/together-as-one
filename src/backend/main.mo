@@ -22,6 +22,10 @@ actor {
   type Loan = { id : Text; userId : Text; amount : Nat; interest : Nat; status : LoanStatus; timestamp : Int };
   type DepositStatus = { #pending; #approved; #rejected };
   type DepositRequest = { id : Text; userId : Text; amount : Nat; status : DepositStatus; timestamp : Int };
+  type WithdrawalStatus = { #pending; #approved; #rejected };
+  type WithdrawalRequest = { id : Text; userId : Text; amount : Nat; status : WithdrawalStatus; timestamp : Int; note : Text };
+  type LoanPayment = { id : Text; loanId : Text; userId : Text; amount : Nat; timestamp : Int };
+  type MonthlyContribution = { id : Text; userId : Text; month : Nat; year : Nat; amount : Nat; timestamp : Int };
   type MemberSummary = { id : Text; name : Text; email : Text; savings : Nat; loanCount : Nat };
   type MemberDetail = { user : User; transactions : [Transaction]; loans : [Loan] };
   type UserProfile = { id : Text; name : Text; email : Text; role : Text; savings : Nat; lastLogin : Int };
@@ -32,9 +36,13 @@ actor {
   stable var stableTransactions : [(Text, Transaction)] = [];
   stable var stableLoans : [(Text, Loan)] = [];
   stable var stableDepositRequests : [(Text, DepositRequest)] = [];
+  stable var stableWithdrawalRequests : [(Text, WithdrawalRequest)] = [];
+  stable var stableLoanPayments : [(Text, LoanPayment)] = [];
+  stable var stableMonthlyContributions : [(Text, MonthlyContribution)] = [];
   stable var adminInitialized : Bool = false;
   stable var adminId : Text = "";
   stable var adminUser : User = { id = ""; name = ""; email = ""; passwordHash = ""; role = ""; savings = 0; lastLogin = 0 };
+  stable var monthlyContributionTarget : Nat = 1000;
 
   let users = Map.empty<Text, User>();
   let emailToUserId = Map.empty<Text, Text>();
@@ -42,11 +50,17 @@ actor {
   let transactions = Map.empty<Text, Transaction>();
   let loans = Map.empty<Text, Loan>();
   let depositRequests = Map.empty<Text, DepositRequest>();
+  let withdrawalRequests = Map.empty<Text, WithdrawalRequest>();
+  let loanPayments = Map.empty<Text, LoanPayment>();
+  let monthlyContributions = Map.empty<Text, MonthlyContribution>();
 
   stable var nextUserId : Nat = 1;
   stable var nextTransactionId : Nat = 1;
   stable var nextLoanId : Nat = 1;
   stable var nextDepositRequestId : Nat = 1;
+  stable var nextWithdrawalRequestId : Nat = 1;
+  stable var nextLoanPaymentId : Nat = 1;
+  stable var nextContributionId : Nat = 1;
 
   let ADMIN_EMAIL = "admin@gmail.com";
   let ADMIN_PASSWORD = "admin123";
@@ -57,26 +71,59 @@ actor {
   func generateTransactionId() : Text { let id = nextTransactionId.toText(); nextTransactionId += 1; id };
   func generateLoanId() : Text { let id = nextLoanId.toText(); nextLoanId += 1; id };
   func generateDepositRequestId() : Text { let id = nextDepositRequestId.toText(); nextDepositRequestId += 1; "dr" # id };
+  func generateWithdrawalRequestId() : Text { let id = nextWithdrawalRequestId.toText(); nextWithdrawalRequestId += 1; "wr" # id };
+  func generateLoanPaymentId() : Text { let id = nextLoanPaymentId.toText(); nextLoanPaymentId += 1; "lp" # id };
+  func generateContributionId() : Text { let id = nextContributionId.toText(); nextContributionId += 1; "mc" # id };
 
   func getUserByEmail(email : Text) : ?User {
-    switch (emailToUserId.get(email)) { case null null; case (?uid) users.get(uid) };
+    switch (emailToUserId.get(email)) {
+      case (?uid) {
+        switch (users.get(uid)) {
+          case (?u) ?u;
+          case null {
+            // emailToUserId out of sync — fallback linear scan
+            var found : ?User = null;
+            for (u in users.values()) { if (u.email == email) { found := ?u } };
+            found
+          };
+        };
+      };
+      case null {
+        // emailToUserId missing entry — fallback linear scan and repair
+        var found : ?User = null;
+        for (u in users.values()) { if (u.email == email) { found := ?u } };
+        switch (found) {
+          case (?u) { emailToUserId.remove(email); emailToUserId.add(email, u.id) };
+          case null {};
+        };
+        found
+      };
+    };
   };
   func getUserById(uid : Text) : ?User { users.get(uid) };
   func isAdminById(uid : Text) : Bool {
+    if (uid == ADMIN_FIXED_ID) return true;
     switch (users.get(uid)) { case null false; case (?u) u.role == "admin" };
   };
   func getCallerUserId(caller : Principal) : ?Text { principalToUserId.get(caller) };
   func isAdminCaller(caller : Principal) : Bool {
     switch (principalToUserId.get(caller)) {
       case null false;
-      case (?uid) { switch (users.get(uid)) { case null false; case (?u) u.role == "admin" } };
+      case (?uid) { if (uid == ADMIN_FIXED_ID) return true; switch (users.get(uid)) { case null false; case (?u) u.role == "admin" } };
     };
   };
   func isLoggedIn(caller : Principal) : Bool {
     switch (principalToUserId.get(caller)) { case null false; case (?_) true };
   };
 
-  // Always repairs admin account — called on init and postupgrade and during admin login
+  func getLoanPaidAmount(loanId : Text) : Nat {
+    var total : Nat = 0;
+    for (p in loanPayments.values()) {
+      if (p.loanId == loanId) { total += p.amount };
+    };
+    total;
+  };
+
   func ensureAdminExists() {
     let existingSavings : Nat = switch (users.get(ADMIN_FIXED_ID)) {
       case (?u) u.savings; case null 0;
@@ -100,6 +147,9 @@ actor {
     stableTransactions := transactions.entries().toArray();
     stableLoans := loans.entries().toArray();
     stableDepositRequests := depositRequests.entries().toArray();
+    stableWithdrawalRequests := withdrawalRequests.entries().toArray();
+    stableLoanPayments := loanPayments.entries().toArray();
+    stableMonthlyContributions := monthlyContributions.entries().toArray();
   };
 
   system func postupgrade() {
@@ -109,6 +159,9 @@ actor {
     for ((k, v) in stableTransactions.vals()) { transactions.remove(k); transactions.add(k, v) };
     for ((k, v) in stableLoans.vals()) { loans.remove(k); loans.add(k, v) };
     for ((k, v) in stableDepositRequests.vals()) { depositRequests.remove(k); depositRequests.add(k, v) };
+    for ((k, v) in stableWithdrawalRequests.vals()) { withdrawalRequests.remove(k); withdrawalRequests.add(k, v) };
+    for ((k, v) in stableLoanPayments.vals()) { loanPayments.remove(k); loanPayments.add(k, v) };
+    for ((k, v) in stableMonthlyContributions.vals()) { monthlyContributions.remove(k); monthlyContributions.add(k, v) };
     ensureAdminExists();
   };
 
@@ -127,36 +180,29 @@ actor {
     #ok(u);
   };
 
-  // Admin login uses hardcoded fast-path bypassing the email map,
-  // so map corruption can never prevent admin login.
-  // Member login updates their lastLogin and profile on every sign-in.
   public shared ({ caller }) func login(email : Text, password : Text) : async { #ok : User; #err : Text } {
     if (email == ADMIN_EMAIL) {
       if (password != ADMIN_PASSWORD) return #err("Invalid password");
-      ensureAdminExists(); // self-heal any corruption
-      switch (users.get(ADMIN_FIXED_ID)) {
-        case null return #err("Admin account error");
-        case (?admin) {
-          let updated : User = { id = admin.id; name = admin.name; email = admin.email; passwordHash = admin.passwordHash; role = admin.role; savings = admin.savings; lastLogin = Time.now() };
-          users.remove(ADMIN_FIXED_ID); users.add(ADMIN_FIXED_ID, updated);
-          principalToUserId.remove(caller); principalToUserId.add(caller, ADMIN_FIXED_ID);
-          accessControlState.userRoles.remove(caller);
-          accessControlState.userRoles.add(caller, #admin);
-          accessControlState.adminAssigned := true;
-          return #ok(updated);
-        };
+      let existingSavings : Nat = switch (users.get(ADMIN_FIXED_ID)) { case (?u) u.savings; case null 0 };
+      let now = Time.now();
+      let admin : User = {
+        id = ADMIN_FIXED_ID; name = "Admin"; email = ADMIN_EMAIL;
+        passwordHash = hashPassword(ADMIN_PASSWORD); role = "admin";
+        savings = existingSavings; lastLogin = now;
       };
+      users.remove(ADMIN_FIXED_ID); users.add(ADMIN_FIXED_ID, admin);
+      emailToUserId.remove("petermuchere@gmail.com");
+      emailToUserId.remove(ADMIN_EMAIL); emailToUserId.add(ADMIN_EMAIL, ADMIN_FIXED_ID);
+      principalToUserId.remove(caller); principalToUserId.add(caller, ADMIN_FIXED_ID);
+      return #ok(admin);
     };
     switch (getUserByEmail(email)) {
       case null return #err("User not found");
       case (?user) {
         if (user.passwordHash != hashPassword(password)) return #err("Invalid password");
-        // Update lastLogin on every member sign-in
         let updated : User = { id = user.id; name = user.name; email = user.email; passwordHash = user.passwordHash; role = user.role; savings = user.savings; lastLogin = Time.now() };
         users.remove(user.id); users.add(user.id, updated);
         principalToUserId.remove(caller); principalToUserId.add(caller, user.id);
-        accessControlState.userRoles.remove(caller);
-        accessControlState.userRoles.add(caller, #user);
         #ok(updated);
       };
     };
@@ -280,6 +326,143 @@ actor {
     switch (getUserById(userId)) {
       case null return #err("User not found");
       case (?_) #ok(loans.values().filter(func(l) { l.userId == userId }).toArray());
+    };
+  };
+
+  // Loan repayment: member makes a partial payment toward an approved loan
+  public shared func makeRepayment(userId : Text, loanId : Text, amount : Nat) : async { #ok : LoanPayment; #err : Text } {
+    switch (getUserById(userId)) {
+      case null return #err("User not found");
+      case (?_) {
+        switch (loans.get(loanId)) {
+          case null return #err("Loan not found");
+          case (?loan) {
+            if (loan.userId != userId) return #err("Unauthorized");
+            switch (loan.status) {
+              case (#approved) {};
+              case (_) return #err("Loan is not in approved status");
+            };
+            let totalOwed = loan.amount + loan.interest;
+            let alreadyPaid = getLoanPaidAmount(loanId);
+            if (alreadyPaid >= totalOwed) return #err("Loan already fully paid");
+            let remaining = totalOwed - alreadyPaid;
+            let actualAmount = if (amount > remaining) remaining else amount;
+            let pid = generateLoanPaymentId();
+            let payment : LoanPayment = { id = pid; loanId = loanId; userId = userId; amount = actualAmount; timestamp = Time.now() };
+            loanPayments.add(pid, payment);
+            // Auto-mark as paid if fully repaid
+            if (alreadyPaid + actualAmount >= totalOwed) {
+              let updated : Loan = { id = loan.id; userId = loan.userId; amount = loan.amount; interest = loan.interest; status = #paid; timestamp = loan.timestamp };
+              loans.remove(loanId); loans.add(loanId, updated);
+            };
+            #ok(payment);
+          };
+        };
+      };
+    };
+  };
+
+  public query func getLoanPayments(loanId : Text) : async { #ok : [LoanPayment]; #err : Text } {
+    #ok(loanPayments.values().filter(func(p) { p.loanId == loanId }).toArray());
+  };
+
+  public query func getMyLoanPayments(userId : Text) : async { #ok : [LoanPayment]; #err : Text } {
+    #ok(loanPayments.values().filter(func(p) { p.userId == userId }).toArray());
+  };
+
+  // Withdrawal requests
+  public shared func requestWithdrawal(userId : Text, amount : Nat, note : Text) : async { #ok : WithdrawalRequest; #err : Text } {
+    switch (getUserById(userId)) {
+      case null return #err("User not found");
+      case (?user) {
+        if (user.role == "admin") return #err("Admins cannot request withdrawals");
+        if (amount > user.savings) return #err("Insufficient savings balance");
+        let wrId = generateWithdrawalRequestId();
+        let wr : WithdrawalRequest = { id = wrId; userId = userId; amount = amount; status = #pending; timestamp = Time.now(); note = note };
+        withdrawalRequests.add(wrId, wr);
+        #ok(wr);
+      };
+    };
+  };
+
+  public shared func approveWithdrawal(adminUserId : Text, withdrawalId : Text) : async { #ok : WithdrawalRequest; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
+    switch (withdrawalRequests.get(withdrawalId)) {
+      case null return #err("Withdrawal request not found");
+      case (?wr) {
+        switch (getUserById(wr.userId)) {
+          case null return #err("User not found");
+          case (?user) {
+            if (wr.amount > user.savings) return #err("Insufficient savings");
+            let newSavings = user.savings - wr.amount;
+            let updated : User = { id = user.id; name = user.name; email = user.email; passwordHash = user.passwordHash; role = user.role; savings = newSavings; lastLogin = user.lastLogin };
+            users.remove(user.id); users.add(user.id, updated);
+            let updatedWr : WithdrawalRequest = { id = wr.id; userId = wr.userId; amount = wr.amount; status = #approved; timestamp = wr.timestamp; note = wr.note };
+            withdrawalRequests.remove(withdrawalId); withdrawalRequests.add(withdrawalId, updatedWr);
+            #ok(updatedWr);
+          };
+        };
+      };
+    };
+  };
+
+  public shared func rejectWithdrawal(adminUserId : Text, withdrawalId : Text) : async { #ok : WithdrawalRequest; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
+    switch (withdrawalRequests.get(withdrawalId)) {
+      case null return #err("Withdrawal request not found");
+      case (?wr) {
+        let updatedWr : WithdrawalRequest = { id = wr.id; userId = wr.userId; amount = wr.amount; status = #rejected; timestamp = wr.timestamp; note = wr.note };
+        withdrawalRequests.remove(withdrawalId); withdrawalRequests.add(withdrawalId, updatedWr);
+        #ok(updatedWr);
+      };
+    };
+  };
+
+  public query func getAllPendingWithdrawals(adminUserId : Text) : async { #ok : [WithdrawalRequest]; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
+    #ok(withdrawalRequests.values().filter(func(wr) { switch (wr.status) { case (#pending) true; case (_) false } }).toArray());
+  };
+
+  public query func getMyWithdrawalRequests(userId : Text) : async { #ok : [WithdrawalRequest]; #err : Text } {
+    switch (getUserById(userId)) {
+      case null return #err("User not found");
+      case (?_) #ok(withdrawalRequests.values().filter(func(wr) { wr.userId == userId }).toArray());
+    };
+  };
+
+  // Monthly contributions
+  public shared func setMonthlyContributionAmount(adminUserId : Text, amount : Nat) : async { #ok : Nat; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
+    monthlyContributionTarget := amount;
+    #ok(amount);
+  };
+
+  public query func getMonthlyContributionAmount() : async Nat {
+    monthlyContributionTarget;
+  };
+
+  public shared func recordContribution(adminUserId : Text, userId : Text, month : Nat, year : Nat, amount : Nat) : async { #ok : MonthlyContribution; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
+    switch (getUserById(userId)) {
+      case null return #err("User not found");
+      case (?_) {
+        let cid = generateContributionId();
+        let c : MonthlyContribution = { id = cid; userId = userId; month = month; year = year; amount = amount; timestamp = Time.now() };
+        monthlyContributions.add(cid, c);
+        #ok(c);
+      };
+    };
+  };
+
+  public query func getContributionSummary(adminUserId : Text, month : Nat, year : Nat) : async { #ok : [MonthlyContribution]; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
+    #ok(monthlyContributions.values().filter(func(c) { c.month == month and c.year == year }).toArray());
+  };
+
+  public query func getMyContributions(userId : Text) : async { #ok : [MonthlyContribution]; #err : Text } {
+    switch (getUserById(userId)) {
+      case null return #err("User not found");
+      case (?_) #ok(monthlyContributions.values().filter(func(c) { c.userId == userId }).toArray());
     };
   };
 
