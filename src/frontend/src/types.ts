@@ -7,7 +7,8 @@ export type ViewType =
   | "admin-dashboard"
   | "admin-members"
   | "admin-member-detail"
-  | "admin-pending-loans";
+  | "admin-pending-loans"
+  | "admin-pending-deposits";
 
 export interface StoredUser {
   id: string;

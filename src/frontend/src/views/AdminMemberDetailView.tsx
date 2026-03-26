@@ -2,6 +2,16 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import {
   ArrowDownCircle,
@@ -9,12 +19,15 @@ import {
   CheckCircle,
   CreditCard,
   Loader2,
+  PiggyBank,
   RotateCcw,
   XCircle,
 } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { LoanStatus } from "../backend.d";
 import {
+  useAdminDeposit,
   useApproveLoan,
   useGetMemberDetail,
   useMarkLoanPaid,
@@ -69,6 +82,10 @@ export function AdminMemberDetailView({ memberId, onBack }: Props) {
   const rejectMutation = useRejectLoan();
   const markPaidMutation = useMarkLoanPaid();
   const resetMutation = useResetMember();
+  const adminDepositMutation = useAdminDeposit();
+
+  const [savingsDialogOpen, setSavingsDialogOpen] = useState(false);
+  const [savingsAmount, setSavingsAmount] = useState("");
 
   const handleApprove = async (loanId: string) => {
     try {
@@ -106,6 +123,22 @@ export function AdminMemberDetailView({ memberId, onBack }: Props) {
     }
   };
 
+  const handleAddSavings = async () => {
+    const amt = Number(savingsAmount);
+    if (!amt || amt <= 0) {
+      toast.error("Please enter a valid amount");
+      return;
+    }
+    try {
+      await adminDepositMutation.mutateAsync({ memberId, amount: BigInt(amt) });
+      toast.success("Savings added successfully!");
+      setSavingsDialogOpen(false);
+      setSavingsAmount("");
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to add savings");
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col" data-ocid="admin_detail.page">
       <header className="bg-card border-b px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
@@ -119,21 +152,33 @@ export function AdminMemberDetailView({ memberId, onBack }: Props) {
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <h1 className="font-bold text-base flex-1">Member Detail</h1>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 text-xs text-destructive border-destructive hover:bg-destructive hover:text-white"
-          onClick={handleReset}
-          disabled={resetMutation.isPending}
-          data-ocid="admin_detail.delete_button"
-        >
-          {resetMutation.isPending ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
-          ) : (
-            <RotateCcw className="w-3.5 h-3.5 mr-1" />
-          )}
-          Reset
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs text-primary border-primary hover:bg-primary hover:text-white"
+            onClick={() => setSavingsDialogOpen(true)}
+            data-ocid="admin_detail.open_modal_button"
+          >
+            <PiggyBank className="w-3.5 h-3.5 mr-1" />
+            Add Savings
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs text-destructive border-destructive hover:bg-destructive hover:text-white"
+            onClick={handleReset}
+            disabled={resetMutation.isPending}
+            data-ocid="admin_detail.delete_button"
+          >
+            {resetMutation.isPending ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+            ) : (
+              <RotateCcw className="w-3.5 h-3.5 mr-1" />
+            )}
+            Reset
+          </Button>
+        </div>
       </header>
 
       {isLoading ? (
@@ -294,6 +339,55 @@ export function AdminMemberDetailView({ memberId, onBack }: Props) {
           </div>
         </main>
       )}
+
+      {/* Add Savings Dialog */}
+      <Dialog open={savingsDialogOpen} onOpenChange={setSavingsDialogOpen}>
+        <DialogContent data-ocid="admin_detail.dialog">
+          <DialogHeader>
+            <DialogTitle>Add Savings</DialogTitle>
+            <DialogDescription>
+              Manually credit savings to this member's account
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Label htmlFor="savings-amount">Amount (KES)</Label>
+            <Input
+              id="savings-amount"
+              type="number"
+              min="1"
+              placeholder="e.g. 5000"
+              value={savingsAmount}
+              onChange={(e) => setSavingsAmount(e.target.value)}
+              data-ocid="admin_detail.input"
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSavingsDialogOpen(false);
+                setSavingsAmount("");
+              }}
+              data-ocid="admin_detail.cancel_button"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddSavings}
+              disabled={adminDepositMutation.isPending || !savingsAmount}
+              style={{ background: "#0B4A37" }}
+              data-ocid="admin_detail.submit_button"
+            >
+              {adminDepositMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <PiggyBank className="w-4 h-4 mr-2" />
+              )}
+              Add Savings
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

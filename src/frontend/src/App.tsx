@@ -4,6 +4,7 @@ import type { StoredUser, ViewType } from "./types";
 import { AdminDashboardView } from "./views/AdminDashboardView";
 import { AdminMemberDetailView } from "./views/AdminMemberDetailView";
 import { AdminMembersView } from "./views/AdminMembersView";
+import { AdminPendingDepositsView } from "./views/AdminPendingDepositsView";
 import { AdminPendingLoansView } from "./views/AdminPendingLoansView";
 import { LoginView } from "./views/LoginView";
 import { MemberDashboardView } from "./views/MemberDashboardView";
@@ -19,6 +20,9 @@ export default function App() {
   const [selectedMemberId, setSelectedMemberId] = useState<string>("");
 
   useEffect(() => {
+    // Register service worker for push notifications
+    navigator.serviceWorker?.register("/sw.js").catch(() => {});
+
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       try {
@@ -105,6 +109,11 @@ export default function App() {
         )}
         {currentView === "admin-pending-loans" && currentUser && (
           <AdminPendingLoansView onBack={() => navigate("admin-dashboard")} />
+        )}
+        {currentView === "admin-pending-deposits" && currentUser && (
+          <AdminPendingDepositsView
+            onBack={() => navigate("admin-dashboard")}
+          />
         )}
       </div>
       <Toaster position="top-center" richColors />

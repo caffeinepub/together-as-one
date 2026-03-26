@@ -1,7 +1,16 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowDownCircle, ArrowLeft, Loader2 } from "lucide-react";
-import { useGetMyTransactions } from "../hooks/useQueries";
+import {
+  ArrowDownCircle,
+  ArrowLeft,
+  Clock,
+  Loader2,
+  XCircle,
+} from "lucide-react";
+import {
+  useGetMyDepositRequests,
+  useGetMyTransactions,
+} from "../hooks/useQueries";
 import { formatAmount, formatDate } from "../types";
 
 interface Props {
@@ -9,8 +18,45 @@ interface Props {
   onBack: () => void;
 }
 
+type CombinedItem =
+  | { kind: "transaction"; id: string; amount: bigint; timestamp: bigint }
+  | {
+      kind: "deposit_request";
+      id: string;
+      amount: bigint;
+      timestamp: bigint;
+      status: string;
+    };
+
 export function TransactionHistoryView({ userId, onBack }: Props) {
-  const { data: transactions, isLoading } = useGetMyTransactions(userId);
+  const { data: transactions, isLoading: txLoading } =
+    useGetMyTransactions(userId);
+  const { data: depositRequests, isLoading: reqLoading } =
+    useGetMyDepositRequests(userId);
+
+  const isLoading = txLoading || reqLoading;
+
+  const combined: CombinedItem[] = [
+    ...(transactions ?? []).map(
+      (tx): CombinedItem => ({
+        kind: "transaction",
+        id: tx.id,
+        amount: tx.amount,
+        timestamp: tx.timestamp,
+      }),
+    ),
+    ...(depositRequests ?? [])
+      .filter((r) => r.status !== "approved")
+      .map(
+        (r): CombinedItem => ({
+          kind: "deposit_request",
+          id: r.id,
+          amount: r.amount,
+          timestamp: r.timestamp,
+          status: r.status,
+        }),
+      ),
+  ].sort((a, b) => (b.timestamp > a.timestamp ? 1 : -1));
 
   return (
     <div className="min-h-screen flex flex-col" data-ocid="transactions.page">
@@ -32,7 +78,7 @@ export function TransactionHistoryView({ userId, onBack }: Props) {
         style={{ background: "linear-gradient(to right, #0B4A37, #C6A24D)" }}
       >
         <p className="font-semibold">
-          {transactions?.length ?? 0} Transactions
+          {(transactions ?? []).length} Confirmed Deposits
         </p>
         <p className="text-white/70 text-xs mt-0.5">All your deposit history</p>
       </div>
@@ -45,7 +91,7 @@ export function TransactionHistoryView({ userId, onBack }: Props) {
           >
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
-        ) : !transactions || transactions.length === 0 ? (
+        ) : combined.length === 0 ? (
           <div
             className="text-center py-12 text-muted-foreground"
             data-ocid="transactions.empty_state"
@@ -59,25 +105,59 @@ export function TransactionHistoryView({ userId, onBack }: Props) {
         ) : (
           <Card className="border-0 shadow-card">
             <CardContent className="pt-2 pb-2">
-              {transactions.map((tx, i) => (
-                <div key={tx.id} data-ocid={`transactions.item.${i + 1}`}>
+              {combined.map((item, i) => (
+                <div key={item.id} data-ocid={`transactions.item.${i + 1}`}>
                   <div className="flex items-center justify-between py-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-success/10 flex items-center justify-center flex-shrink-0">
-                        <ArrowDownCircle className="w-4 h-4 text-success" />
-                      </div>
+                      {item.kind === "transaction" ? (
+                        <div className="w-9 h-9 rounded-full bg-success/10 flex items-center justify-center flex-shrink-0">
+                          <ArrowDownCircle className="w-4 h-4 text-success" />
+                        </div>
+                      ) : item.status === "pending" ? (
+                        <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                          <Clock className="w-4 h-4 text-amber-500" />
+                        </div>
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0">
+                          <XCircle className="w-4 h-4 text-destructive" />
+                        </div>
+                      )}
                       <div>
-                        <p className="text-sm font-semibold">Deposit</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-semibold">Deposit</p>
+                          {item.kind === "deposit_request" && (
+                            <span
+                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                                item.status === "pending"
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "bg-destructive/10 text-destructive"
+                              }`}
+                            >
+                              {item.status === "pending"
+                                ? "Pending"
+                                : "Rejected"}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground">
-                          {formatDate(tx.timestamp)}
+                          {formatDate(item.timestamp)}
                         </p>
                       </div>
                     </div>
-                    <span className="text-sm font-bold text-success">
-                      +{formatAmount(tx.amount)}
+                    <span
+                      className={`text-sm font-bold ${
+                        item.kind === "transaction"
+                          ? "text-success"
+                          : item.status === "pending"
+                            ? "text-amber-500"
+                            : "text-destructive"
+                      }`}
+                    >
+                      {item.kind === "transaction" ? "+" : ""}
+                      {formatAmount(item.amount)}
                     </span>
                   </div>
-                  {i < transactions.length - 1 && <div className="border-b" />}
+                  {i < combined.length - 1 && <div className="border-b" />}
                 </div>
               ))}
             </CardContent>

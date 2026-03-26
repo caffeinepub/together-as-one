@@ -36,6 +36,13 @@ export interface Loan {
     timestamp: bigint;
     amount: bigint;
 }
+export interface DepositRequest {
+    id: string;
+    status: DepositStatus;
+    userId: string;
+    timestamp: bigint;
+    amount: bigint;
+}
 export interface UserProfile {
     id: string;
     name: string;
@@ -56,42 +63,89 @@ export enum LoanStatus {
     approved = "approved",
     rejected = "rejected"
 }
+export enum DepositStatus {
+    pending = "pending",
+    approved = "approved",
+    rejected = "rejected"
+}
 export enum UserRole {
     admin = "admin",
     user = "user",
     guest = "guest"
 }
 export interface backendInterface {
-    addMember(name: string, email: string, password: string): Promise<{
+    addMember(adminId: string, name: string, email: string, password: string): Promise<{
         __kind__: "ok";
         ok: User;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    approveLoan(loanId: string): Promise<{
+    approveLoan(adminId: string, loanId: string): Promise<{
         __kind__: "ok";
         ok: Loan;
     } | {
         __kind__: "err";
         err: string;
     }>;
+    approveDeposit(adminId: string, depositId: string): Promise<{
+        __kind__: "ok";
+        ok: DepositRequest;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    rejectDeposit(adminId: string, depositId: string): Promise<{
+        __kind__: "ok";
+        ok: DepositRequest;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    requestDeposit(userId: string, amount: bigint): Promise<{
+        __kind__: "ok";
+        ok: DepositRequest;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    getAllPendingDeposits(adminId: string): Promise<{
+        __kind__: "ok";
+        ok: Array<DepositRequest>;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    getMyDepositRequests(userId: string): Promise<{
+        __kind__: "ok";
+        ok: Array<DepositRequest>;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
-    deposit(userId: string, amount: bigint): Promise<{
+    deposit(adminId: string, userId: string, amount: bigint): Promise<{
         __kind__: "ok";
         ok: bigint;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    getAllMembers(): Promise<{
+    adminDeposit(adminId: string, memberId: string, amount: bigint): Promise<{
+        __kind__: "ok";
+        ok: bigint;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    getAllMembers(adminId: string): Promise<{
         __kind__: "ok";
         ok: Array<MemberSummary>;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    getAllPendingLoans(): Promise<{
+    getAllPendingLoans(adminId: string): Promise<{
         __kind__: "ok";
         ok: Array<Loan>;
     } | {
@@ -100,7 +154,7 @@ export interface backendInterface {
     }>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
-    getMemberDetail(userId: string): Promise<{
+    getMemberDetail(adminId: string, userId: string): Promise<{
         __kind__: "ok";
         ok: MemberDetail;
     } | {
@@ -128,7 +182,7 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
-    getTotalSavings(): Promise<{
+    getTotalSavings(adminId: string): Promise<{
         __kind__: "ok";
         ok: bigint;
     } | {
@@ -144,7 +198,7 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
-    markLoanPaid(loanId: string): Promise<{
+    markLoanPaid(adminId: string, loanId: string): Promise<{
         __kind__: "ok";
         ok: Loan;
     } | {
@@ -158,14 +212,14 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
-    rejectLoan(loanId: string): Promise<{
+    rejectLoan(adminId: string, loanId: string): Promise<{
         __kind__: "ok";
         ok: Loan;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    removeMember(userId: string): Promise<{
+    removeMember(adminId: string, userId: string): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
@@ -179,7 +233,7 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
-    resetMember(userId: string): Promise<{
+    resetMember(adminId: string, userId: string): Promise<{
         __kind__: "ok";
         ok: string;
     } | {

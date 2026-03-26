@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, CheckCircle, Clock, Loader2, XCircle } from "lucide-react";
 import { toast } from "sonner";
+import { addNotification, useNotifications } from "../hooks/useNotifications";
 import {
   useApproveLoan,
   useGetAllPendingLoans,
@@ -17,20 +18,45 @@ export function AdminPendingLoansView({ onBack }: Props) {
   const { data: loans, isLoading } = useGetAllPendingLoans();
   const approveMutation = useApproveLoan();
   const rejectMutation = useRejectLoan();
+  const { sendNotification } = useNotifications("admin");
 
   const handleApprove = async (loanId: string) => {
+    const loan = loans?.find((l) => l.id === loanId);
     try {
       await approveMutation.mutateAsync(loanId);
       toast.success("Loan approved!");
+      if (loan) {
+        addNotification(
+          loan.userId,
+          "Loan Approved",
+          `Your loan of ${formatAmount(loan.amount)} has been approved!`,
+        );
+        sendNotification(
+          "Loan Approved",
+          `Loan of ${formatAmount(loan.amount)} approved successfully.`,
+        );
+      }
     } catch (e: any) {
       toast.error(e.message ?? "Failed");
     }
   };
 
   const handleReject = async (loanId: string) => {
+    const loan = loans?.find((l) => l.id === loanId);
     try {
       await rejectMutation.mutateAsync(loanId);
       toast.success("Loan rejected.");
+      if (loan) {
+        addNotification(
+          loan.userId,
+          "Loan Rejected",
+          `Your loan request of ${formatAmount(loan.amount)} was not approved.`,
+        );
+        sendNotification(
+          "Loan Rejected",
+          `Loan of ${formatAmount(loan.amount)} was rejected.`,
+        );
+      }
     } catch (e: any) {
       toast.error(e.message ?? "Failed");
     }

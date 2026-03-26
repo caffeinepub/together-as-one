@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Leaf, Loader2 } from "lucide-react";
+import { ArrowLeft, Cpu, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { User } from "../backend.d";
@@ -72,8 +72,8 @@ export function RegisterView({ onLogin, onNavigate }: Props) {
           <ArrowLeft className="w-4 h-4" />
         </button>
         <div className="flex items-center gap-2">
-          <Leaf className="w-5 h-5" />
-          <span className="text-lg font-bold">Together As One</span>
+          <Cpu className="w-5 h-5" />
+          <span className="text-lg font-bold">Sultantech</span>
         </div>
       </div>
 

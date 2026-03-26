@@ -10,77 +10,28 @@ import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 
 actor {
-  // Authorization logic
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
-  type UserRole = {
-    #admin;
-    #member;
-  };
-
   type User = {
-    id : Text;
-    name : Text;
-    email : Text;
-    passwordHash : Text;
-    role : Text;
-    savings : Nat;
-    lastLogin : Int;
+    id : Text; name : Text; email : Text; passwordHash : Text;
+    role : Text; savings : Nat; lastLogin : Int;
   };
+  type Transaction = { id : Text; userId : Text; amount : Nat; timestamp : Int };
+  type LoanStatus = { #pending; #approved; #rejected; #paid };
+  type Loan = { id : Text; userId : Text; amount : Nat; interest : Nat; status : LoanStatus; timestamp : Int };
+  type DepositStatus = { #pending; #approved; #rejected };
+  type DepositRequest = { id : Text; userId : Text; amount : Nat; status : DepositStatus; timestamp : Int };
+  type MemberSummary = { id : Text; name : Text; email : Text; savings : Nat; loanCount : Nat };
+  type MemberDetail = { user : User; transactions : [Transaction]; loans : [Loan] };
+  type UserProfile = { id : Text; name : Text; email : Text; role : Text; savings : Nat; lastLogin : Int };
 
-  type Transaction = {
-    id : Text;
-    userId : Text;
-    amount : Nat;
-    timestamp : Int;
-  };
-
-  type LoanStatus = {
-    #pending;
-    #approved;
-    #rejected;
-    #paid;
-  };
-
-  type Loan = {
-    id : Text;
-    userId : Text;
-    amount : Nat;
-    interest : Nat;
-    status : LoanStatus;
-    timestamp : Int;
-  };
-
-  type MemberSummary = {
-    id : Text;
-    name : Text;
-    email : Text;
-    savings : Nat;
-    loanCount : Nat;
-  };
-
-  type MemberDetail = {
-    user : User;
-    transactions : [Transaction];
-    loans : [Loan];
-  };
-
-  type UserProfile = {
-    id : Text;
-    name : Text;
-    email : Text;
-    role : Text;
-    savings : Nat;
-    lastLogin : Int;
-  };
-
-  // Stable storage
   stable var stableUsers : [(Text, User)] = [];
   stable var stableEmailToUserId : [(Text, Text)] = [];
   stable var stablePrincipalToUserId : [(Principal, Text)] = [];
   stable var stableTransactions : [(Text, Transaction)] = [];
   stable var stableLoans : [(Text, Loan)] = [];
+  stable var stableDepositRequests : [(Text, DepositRequest)] = [];
   stable var adminInitialized : Bool = false;
   stable var adminId : Text = "";
   stable var adminUser : User = { id = ""; name = ""; email = ""; passwordHash = ""; role = ""; savings = 0; lastLogin = 0 };
@@ -90,76 +41,56 @@ actor {
   let principalToUserId = Map.empty<Principal, Text>();
   let transactions = Map.empty<Text, Transaction>();
   let loans = Map.empty<Text, Loan>();
+  let depositRequests = Map.empty<Text, DepositRequest>();
 
   stable var nextUserId : Nat = 1;
   stable var nextTransactionId : Nat = 1;
   stable var nextLoanId : Nat = 1;
+  stable var nextDepositRequestId : Nat = 1;
 
-  func hashPassword(password : Text) : Text {
-    "hash_" # password;
-  };
+  let ADMIN_EMAIL = "admin@gmail.com";
+  let ADMIN_PASSWORD = "admin123";
+  let ADMIN_FIXED_ID = "admin-0";
 
-  func generateUserId() : Text {
-    let id = nextUserId.toText();
-    nextUserId += 1;
-    id;
-  };
-
-  func generateTransactionId() : Text {
-    let id = nextTransactionId.toText();
-    nextTransactionId += 1;
-    id;
-  };
-
-  func generateLoanId() : Text {
-    let id = nextLoanId.toText();
-    nextLoanId += 1;
-    id;
-  };
+  func hashPassword(p : Text) : Text { "hash_" # p };
+  func generateUserId() : Text { let id = nextUserId.toText(); nextUserId += 1; id };
+  func generateTransactionId() : Text { let id = nextTransactionId.toText(); nextTransactionId += 1; id };
+  func generateLoanId() : Text { let id = nextLoanId.toText(); nextLoanId += 1; id };
+  func generateDepositRequestId() : Text { let id = nextDepositRequestId.toText(); nextDepositRequestId += 1; "dr" # id };
 
   func getUserByEmail(email : Text) : ?User {
-    switch (emailToUserId.get(email)) {
-      case null { null };
-      case (?userId) { users.get(userId) };
+    switch (emailToUserId.get(email)) { case null null; case (?uid) users.get(uid) };
+  };
+  func getUserById(uid : Text) : ?User { users.get(uid) };
+  func isAdminById(uid : Text) : Bool {
+    switch (users.get(uid)) { case null false; case (?u) u.role == "admin" };
+  };
+  func getCallerUserId(caller : Principal) : ?Text { principalToUserId.get(caller) };
+  func isAdminCaller(caller : Principal) : Bool {
+    switch (principalToUserId.get(caller)) {
+      case null false;
+      case (?uid) { switch (users.get(uid)) { case null false; case (?u) u.role == "admin" } };
     };
   };
-
-  func getUserById(userId : Text) : ?User {
-    users.get(userId);
+  func isLoggedIn(caller : Principal) : Bool {
+    switch (principalToUserId.get(caller)) { case null false; case (?_) true };
   };
 
-  func getCallerUserId(caller : Principal) : ?Text {
-    principalToUserId.get(caller);
-  };
-
-  // Always use fixed ID "admin-0" to prevent ID drift across upgrades.
-  // Uses remove+add to force correct state every time.
+  // Always repairs admin account — called on init and postupgrade and during admin login
   func ensureAdminExists() {
-    let adminEmail = "petermuchere@gmail.com";
-    let fixedAdminId = "admin-0";
-
-    // Preserve any existing savings
-    let existingSavings : Nat = switch (users.get(fixedAdminId)) {
-      case (?u) { u.savings };
-      case null { 0 };
+    let existingSavings : Nat = switch (users.get(ADMIN_FIXED_ID)) {
+      case (?u) u.savings; case null 0;
     };
-
-    // Remove stale entries and re-add with correct data
-    users.remove(fixedAdminId);
-    emailToUserId.remove(adminEmail);
-
-    let freshAdmin : User = {
-      id = fixedAdminId;
-      name = "Admin";
-      email = adminEmail;
-      passwordHash = hashPassword("admin123");
-      role = "admin";
-      savings = existingSavings;
-      lastLogin = 0;
+    users.remove(ADMIN_FIXED_ID);
+    emailToUserId.remove("petermuchere@gmail.com");
+    emailToUserId.remove(ADMIN_EMAIL);
+    let a : User = {
+      id = ADMIN_FIXED_ID; name = "Admin"; email = ADMIN_EMAIL;
+      passwordHash = hashPassword(ADMIN_PASSWORD); role = "admin";
+      savings = existingSavings; lastLogin = 0;
     };
-
-    users.add(fixedAdminId, freshAdmin);
-    emailToUserId.add(adminEmail, fixedAdminId);
+    users.add(ADMIN_FIXED_ID, a);
+    emailToUserId.add(ADMIN_EMAIL, ADMIN_FIXED_ID);
   };
 
   system func preupgrade() {
@@ -168,534 +99,333 @@ actor {
     stablePrincipalToUserId := principalToUserId.entries().toArray();
     stableTransactions := transactions.entries().toArray();
     stableLoans := loans.entries().toArray();
+    stableDepositRequests := depositRequests.entries().toArray();
   };
 
   system func postupgrade() {
-    // Restore all stable data first
-    for ((k, v) in stableUsers.vals()) {
-      users.remove(k);
-      users.add(k, v);
-    };
-    for ((k, v) in stableEmailToUserId.vals()) {
-      emailToUserId.remove(k);
-      emailToUserId.add(k, v);
-    };
-    for ((k, v) in stablePrincipalToUserId.vals()) {
-      principalToUserId.remove(k);
-      principalToUserId.add(k, v);
-    };
-    for ((k, v) in stableTransactions.vals()) {
-      transactions.remove(k);
-      transactions.add(k, v);
-    };
-    for ((k, v) in stableLoans.vals()) {
-      loans.remove(k);
-      loans.add(k, v);
-    };
-    // Ensure admin always exists with correct credentials
+    for ((k, v) in stableUsers.vals()) { users.remove(k); users.add(k, v) };
+    for ((k, v) in stableEmailToUserId.vals()) { emailToUserId.remove(k); emailToUserId.add(k, v) };
+    for ((k, v) in stablePrincipalToUserId.vals()) { principalToUserId.remove(k); principalToUserId.add(k, v) };
+    for ((k, v) in stableTransactions.vals()) { transactions.remove(k); transactions.add(k, v) };
+    for ((k, v) in stableLoans.vals()) { loans.remove(k); loans.add(k, v) };
+    for ((k, v) in stableDepositRequests.vals()) { depositRequests.remove(k); depositRequests.add(k, v) };
     ensureAdminExists();
   };
 
-  // On fresh install postupgrade may not run; call here too.
-  // ensureAdminExists is idempotent (remove+add).
   ensureAdminExists();
 
   public shared func register(name : Text, email : Text, password : Text) : async { #ok : User; #err : Text } {
+    if (email == ADMIN_EMAIL) return #err("This email is reserved");
     switch (getUserByEmail(email)) {
-      case (?_) { return #err("Email already registered") };
+      case (?_) return #err("Email already registered");
       case null {};
     };
-
-    let userId = generateUserId();
-    let newUser : User = {
-      id = userId;
-      name = name;
-      email = email;
-      passwordHash = hashPassword(password);
-      role = "member";
-      savings = 0;
-      lastLogin = Time.now();
-    };
-
-    users.add(userId, newUser);
-    emailToUserId.add(email, userId);
-
-    #ok(newUser);
+    let uid = generateUserId();
+    let u : User = { id = uid; name = name; email = email; passwordHash = hashPassword(password); role = "member"; savings = 0; lastLogin = Time.now() };
+    users.add(uid, u);
+    emailToUserId.add(email, uid);
+    #ok(u);
   };
 
+  // Admin login uses hardcoded fast-path bypassing the email map,
+  // so map corruption can never prevent admin login.
+  // Member login updates their lastLogin and profile on every sign-in.
   public shared ({ caller }) func login(email : Text, password : Text) : async { #ok : User; #err : Text } {
-    switch (getUserByEmail(email)) {
-      case null { return #err("User not found") };
-      case (?user) {
-        if (user.passwordHash != hashPassword(password)) {
-          return #err("Invalid password");
-        };
-
-        let updatedUser = {
-          id = user.id;
-          name = user.name;
-          email = user.email;
-          passwordHash = user.passwordHash;
-          role = user.role;
-          savings = user.savings;
-          lastLogin = Time.now();
-        };
-
-        users.remove(user.id);
-        users.add(user.id, updatedUser);
-
-        principalToUserId.remove(caller);
-        principalToUserId.add(caller, user.id);
-
-        let accessRole : AccessControl.UserRole = if (user.role == "admin") { #admin } else { #user };
-        accessControlState.userRoles.remove(caller);
-        accessControlState.userRoles.add(caller, accessRole);
-        if (accessRole == #admin) {
+    if (email == ADMIN_EMAIL) {
+      if (password != ADMIN_PASSWORD) return #err("Invalid password");
+      ensureAdminExists(); // self-heal any corruption
+      switch (users.get(ADMIN_FIXED_ID)) {
+        case null return #err("Admin account error");
+        case (?admin) {
+          let updated : User = { id = admin.id; name = admin.name; email = admin.email; passwordHash = admin.passwordHash; role = admin.role; savings = admin.savings; lastLogin = Time.now() };
+          users.remove(ADMIN_FIXED_ID); users.add(ADMIN_FIXED_ID, updated);
+          principalToUserId.remove(caller); principalToUserId.add(caller, ADMIN_FIXED_ID);
+          accessControlState.userRoles.remove(caller);
+          accessControlState.userRoles.add(caller, #admin);
           accessControlState.adminAssigned := true;
+          return #ok(updated);
         };
-
-        #ok(updatedUser);
+      };
+    };
+    switch (getUserByEmail(email)) {
+      case null return #err("User not found");
+      case (?user) {
+        if (user.passwordHash != hashPassword(password)) return #err("Invalid password");
+        // Update lastLogin on every member sign-in
+        let updated : User = { id = user.id; name = user.name; email = user.email; passwordHash = user.passwordHash; role = user.role; savings = user.savings; lastLogin = Time.now() };
+        users.remove(user.id); users.add(user.id, updated);
+        principalToUserId.remove(caller); principalToUserId.add(caller, user.id);
+        accessControlState.userRoles.remove(caller);
+        accessControlState.userRoles.add(caller, #user);
+        #ok(updated);
       };
     };
   };
 
-  public query ({ caller }) func getMyProfile(callerId : Text) : async { #ok : User; #err : Text } {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      return #err("Unauthorized: Must be logged in");
-    };
+  public query func getMyProfile(callerId : Text) : async { #ok : User; #err : Text } {
+    switch (getUserById(callerId)) { case null #err("User not found"); case (?u) #ok(u) };
+  };
 
-    switch (getCallerUserId(caller)) {
-      case null { return #err("User not found") };
-      case (?userId) {
-        if (userId != callerId) {
-          return #err("Unauthorized: Can only view your own profile");
-        };
-        switch (getUserById(userId)) {
-          case null { #err("User not found") };
-          case (?user) { #ok(user) };
-        };
+  public shared func adminDeposit(adminUserId : Text, memberId : Text, amount : Nat) : async { #ok : Nat; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
+    switch (getUserById(memberId)) {
+      case null return #err("Member not found");
+      case (?user) {
+        if (user.role == "admin") return #err("Cannot deposit to admin account");
+        let newSavings = user.savings + amount;
+        let updated : User = { id = user.id; name = user.name; email = user.email; passwordHash = user.passwordHash; role = user.role; savings = newSavings; lastLogin = user.lastLogin };
+        users.remove(memberId); users.add(memberId, updated);
+        let txId = generateTransactionId();
+        transactions.add(txId, { id = txId; userId = memberId; amount = amount; timestamp = Time.now() });
+        #ok(newSavings);
       };
     };
   };
 
-  public shared ({ caller }) func deposit(userId : Text, amount : Nat) : async { #ok : Nat; #err : Text } {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      return #err("Unauthorized: Must be logged in");
+  public shared func deposit(adminUserId : Text, userId : Text, amount : Nat) : async { #ok : Nat; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
+    switch (getUserById(userId)) {
+      case null return #err("User not found");
+      case (?user) {
+        let newSavings = user.savings + amount;
+        let updated : User = { id = user.id; name = user.name; email = user.email; passwordHash = user.passwordHash; role = user.role; savings = newSavings; lastLogin = user.lastLogin };
+        users.remove(userId); users.add(userId, updated);
+        let txId = generateTransactionId();
+        transactions.add(txId, { id = txId; userId = userId; amount = amount; timestamp = Time.now() });
+        #ok(newSavings);
+      };
     };
+  };
 
-    switch (getCallerUserId(caller)) {
-      case null { return #err("User not found") };
-      case (?callerUserId) {
-        if (callerUserId != userId and not AccessControl.isAdmin(accessControlState, caller)) {
-          return #err("Unauthorized: Can only deposit to your own account");
-        };
+  public shared func requestDeposit(userId : Text, amount : Nat) : async { #ok : DepositRequest; #err : Text } {
+    switch (getUserById(userId)) {
+      case null return #err("User not found");
+      case (?user) {
+        if (user.role == "admin") return #err("Admins cannot submit deposit requests");
+        let drId = generateDepositRequestId();
+        let dr : DepositRequest = { id = drId; userId = userId; amount = amount; status = #pending; timestamp = Time.now() };
+        depositRequests.add(drId, dr);
+        #ok(dr);
+      };
+    };
+  };
 
-        switch (getUserById(userId)) {
-          case null { return #err("User not found") };
+  public shared func approveDeposit(adminUserId : Text, depositId : Text) : async { #ok : DepositRequest; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
+    switch (depositRequests.get(depositId)) {
+      case null return #err("Deposit request not found");
+      case (?dr) {
+        switch (getUserById(dr.userId)) {
+          case null return #err("User not found");
           case (?user) {
-            let newSavings = user.savings + amount;
-            let updatedUser = {
-              id = user.id;
-              name = user.name;
-              email = user.email;
-              passwordHash = user.passwordHash;
-              role = user.role;
-              savings = newSavings;
-              lastLogin = user.lastLogin;
-            };
-            users.remove(userId);
-            users.add(userId, updatedUser);
-
+            let newSavings = user.savings + dr.amount;
+            let updated : User = { id = user.id; name = user.name; email = user.email; passwordHash = user.passwordHash; role = user.role; savings = newSavings; lastLogin = user.lastLogin };
+            users.remove(user.id); users.add(user.id, updated);
             let txId = generateTransactionId();
-            let transaction : Transaction = {
-              id = txId;
-              userId = userId;
-              amount = amount;
-              timestamp = Time.now();
-            };
-            transactions.add(txId, transaction);
-
-            #ok(newSavings);
+            transactions.add(txId, { id = txId; userId = user.id; amount = dr.amount; timestamp = Time.now() });
+            let updatedDr : DepositRequest = { id = dr.id; userId = dr.userId; amount = dr.amount; status = #approved; timestamp = dr.timestamp };
+            depositRequests.remove(depositId); depositRequests.add(depositId, updatedDr);
+            #ok(updatedDr);
           };
         };
       };
     };
   };
 
-  public query ({ caller }) func getMyTransactions(userId : Text) : async { #ok : [Transaction]; #err : Text } {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      return #err("Unauthorized: Must be logged in");
-    };
-
-    switch (getCallerUserId(caller)) {
-      case null { return #err("User not found") };
-      case (?callerUserId) {
-        if (callerUserId != userId and not AccessControl.isAdmin(accessControlState, caller)) {
-          return #err("Unauthorized: Can only view your own transactions");
-        };
-
-        let userTransactions = transactions.values().filter(
-          func(tx) { tx.userId == userId }
-        );
-
-        #ok(userTransactions.toArray());
+  public shared func rejectDeposit(adminUserId : Text, depositId : Text) : async { #ok : DepositRequest; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
+    switch (depositRequests.get(depositId)) {
+      case null return #err("Deposit request not found");
+      case (?dr) {
+        let updatedDr : DepositRequest = { id = dr.id; userId = dr.userId; amount = dr.amount; status = #rejected; timestamp = dr.timestamp };
+        depositRequests.remove(depositId); depositRequests.add(depositId, updatedDr);
+        #ok(updatedDr);
       };
     };
   };
 
-  public shared ({ caller }) func requestLoan(userId : Text, amount : Nat) : async { #ok : Loan; #err : Text } {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      return #err("Unauthorized: Must be logged in");
+  public query func getAllPendingDeposits(adminUserId : Text) : async { #ok : [DepositRequest]; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
+    #ok(depositRequests.values().filter(func(dr) { switch (dr.status) { case (#pending) true; case (_) false } }).toArray());
+  };
+
+  public query func getMyDepositRequests(userId : Text) : async { #ok : [DepositRequest]; #err : Text } {
+    switch (getUserById(userId)) {
+      case null return #err("User not found");
+      case (?_) #ok(depositRequests.values().filter(func(dr) { dr.userId == userId }).toArray());
     };
+  };
 
-    switch (getCallerUserId(caller)) {
-      case null { return #err("User not found") };
-      case (?callerUserId) {
-        if (callerUserId != userId) {
-          return #err("Unauthorized: Can only request loan for yourself");
-        };
+  public query func getMyTransactions(userId : Text) : async { #ok : [Transaction]; #err : Text } {
+    switch (getUserById(userId)) {
+      case null return #err("User not found");
+      case (?_) #ok(transactions.values().filter(func(tx) { tx.userId == userId }).toArray());
+    };
+  };
 
+  public shared func requestLoan(userId : Text, amount : Nat) : async { #ok : Loan; #err : Text } {
+    switch (getUserById(userId)) {
+      case null return #err("User not found");
+      case (?user) {
+        if (user.role == "admin") return #err("Admins cannot request loans");
         let loanId = generateLoanId();
-        let interest = (amount * 10) / 100;
-        let loan : Loan = {
-          id = loanId;
-          userId = userId;
-          amount = amount;
-          interest = interest;
-          status = #pending;
-          timestamp = Time.now();
-        };
+        let loan : Loan = { id = loanId; userId = userId; amount = amount; interest = (amount * 10) / 100; status = #pending; timestamp = Time.now() };
         loans.add(loanId, loan);
-
         #ok(loan);
       };
     };
   };
 
-  public query ({ caller }) func getMyLoans(userId : Text) : async { #ok : [Loan]; #err : Text } {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      return #err("Unauthorized: Must be logged in");
-    };
-
-    switch (getCallerUserId(caller)) {
-      case null { return #err("User not found") };
-      case (?callerUserId) {
-        if (callerUserId != userId and not AccessControl.isAdmin(accessControlState, caller)) {
-          return #err("Unauthorized: Can only view your own loans");
-        };
-
-        let userLoans = loans.values().filter(
-          func(loan) { loan.userId == userId }
-        );
-        #ok(userLoans.toArray());
-      };
+  public query func getMyLoans(userId : Text) : async { #ok : [Loan]; #err : Text } {
+    switch (getUserById(userId)) {
+      case null return #err("User not found");
+      case (?_) #ok(loans.values().filter(func(l) { l.userId == userId }).toArray());
     };
   };
 
-  public query ({ caller }) func getAllMembers() : async { #ok : [MemberSummary]; #err : Text } {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
-      return #err("Unauthorized: Only admins can view all members");
-    };
-
-    let members = users.values().filter(
-      func(user) { user.role == "member" }
-    ).map(
-      func(user) {
-        let loanCount = loans.values().toArray().filter(
-          func(loan) { loan.userId == user.id }
-        ).size();
-        {
-          id = user.id;
-          name = user.name;
-          email = user.email;
-          savings = user.savings;
-          loanCount = loanCount;
-        };
-      }
-    ).toArray();
-
+  public query func getAllMembers(adminUserId : Text) : async { #ok : [MemberSummary]; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
+    let members = users.values().filter(func(u) { u.role == "member" }).map(func(u) {
+      let loanCount = loans.values().toArray().filter(func(l) { l.userId == u.id }).size();
+      { id = u.id; name = u.name; email = u.email; savings = u.savings; loanCount = loanCount };
+    }).toArray();
     #ok(members);
   };
 
-  public shared ({ caller }) func addMember(name : Text, email : Text, password : Text) : async { #ok : User; #err : Text } {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
-      return #err("Unauthorized: Only admins can add members");
-    };
-
+  public shared func addMember(adminUserId : Text, name : Text, email : Text, password : Text) : async { #ok : User; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
     switch (getUserByEmail(email)) {
-      case (?_) { return #err("Email already registered") };
+      case (?_) return #err("Email already registered");
       case null {};
     };
-
-    let userId = generateUserId();
-    let newUser : User = {
-      id = userId;
-      name = name;
-      email = email;
-      passwordHash = hashPassword(password);
-      role = "member";
-      savings = 0;
-      lastLogin = Time.now();
-    };
-
-    users.add(userId, newUser);
-    emailToUserId.add(email, userId);
-
-    #ok(newUser);
+    let uid = generateUserId();
+    let u : User = { id = uid; name = name; email = email; passwordHash = hashPassword(password); role = "member"; savings = 0; lastLogin = Time.now() };
+    users.add(uid, u); emailToUserId.add(email, uid);
+    #ok(u);
   };
 
-  public shared ({ caller }) func removeMember(userId : Text) : async { #ok : Text; #err : Text } {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
-      return #err("Unauthorized: Only admins can remove members");
-    };
-
+  public shared func removeMember(adminUserId : Text, userId : Text) : async { #ok : Text; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
     switch (getUserById(userId)) {
-      case null { return #err("User not found") };
+      case null return #err("User not found");
       case (?user) {
-        if (user.role == "admin") {
-          return #err("Cannot remove admin users");
-        };
-        emailToUserId.remove(user.email);
-        users.remove(userId);
+        if (user.role == "admin") return #err("Cannot remove admin users");
+        emailToUserId.remove(user.email); users.remove(userId);
         #ok("Member removed successfully");
       };
     };
   };
 
-  public query ({ caller }) func getMemberDetail(userId : Text) : async { #ok : MemberDetail; #err : Text } {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
-      return #err("Unauthorized: Only admins can view member details");
-    };
-
+  public query func getMemberDetail(adminUserId : Text, userId : Text) : async { #ok : MemberDetail; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
     switch (getUserById(userId)) {
-      case null { return #err("User not found") };
+      case null return #err("User not found");
       case (?user) {
-        let userTransactions = transactions.values().toArray().filter(
-          func(tx) { tx.userId == userId }
-        );
-        let userLoans = loans.values().toArray().filter(
-          func(loan) { loan.userId == userId }
-        );
-        #ok({
-          user = user;
-          transactions = userTransactions;
-          loans = userLoans;
-        });
+        let txs = transactions.values().toArray().filter(func(tx) { tx.userId == userId });
+        let ls = loans.values().toArray().filter(func(l) { l.userId == userId });
+        #ok({ user = user; transactions = txs; loans = ls });
       };
     };
   };
 
-  public shared ({ caller }) func approveLoan(loanId : Text) : async { #ok : Loan; #err : Text } {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
-      return #err("Unauthorized: Only admins can approve loans");
-    };
-
+  public shared func approveLoan(adminUserId : Text, loanId : Text) : async { #ok : Loan; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
     switch (loans.get(loanId)) {
-      case null { return #err("Loan not found") };
+      case null return #err("Loan not found");
       case (?loan) {
-        let updatedLoan = {
-          id = loan.id;
-          userId = loan.userId;
-          amount = loan.amount;
-          interest = loan.interest;
-          status = #approved;
-          timestamp = loan.timestamp;
-        };
-        loans.remove(loanId);
-        loans.add(loanId, updatedLoan);
-        #ok(updatedLoan);
+        let updated : Loan = { id = loan.id; userId = loan.userId; amount = loan.amount; interest = loan.interest; status = #approved; timestamp = loan.timestamp };
+        loans.remove(loanId); loans.add(loanId, updated); #ok(updated);
       };
     };
   };
 
-  public shared ({ caller }) func rejectLoan(loanId : Text) : async { #ok : Loan; #err : Text } {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
-      return #err("Unauthorized: Only admins can reject loans");
-    };
-
+  public shared func rejectLoan(adminUserId : Text, loanId : Text) : async { #ok : Loan; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
     switch (loans.get(loanId)) {
-      case null { return #err("Loan not found") };
+      case null return #err("Loan not found");
       case (?loan) {
-        let updatedLoan = {
-          id = loan.id;
-          userId = loan.userId;
-          amount = loan.amount;
-          interest = loan.interest;
-          status = #rejected;
-          timestamp = loan.timestamp;
-        };
-        loans.remove(loanId);
-        loans.add(loanId, updatedLoan);
-        #ok(updatedLoan);
+        let updated : Loan = { id = loan.id; userId = loan.userId; amount = loan.amount; interest = loan.interest; status = #rejected; timestamp = loan.timestamp };
+        loans.remove(loanId); loans.add(loanId, updated); #ok(updated);
       };
     };
   };
 
-  public shared ({ caller }) func markLoanPaid(loanId : Text) : async { #ok : Loan; #err : Text } {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
-      return #err("Unauthorized: Only admins can mark loans as paid");
-    };
-
+  public shared func markLoanPaid(adminUserId : Text, loanId : Text) : async { #ok : Loan; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
     switch (loans.get(loanId)) {
-      case null { return #err("Loan not found") };
+      case null return #err("Loan not found");
       case (?loan) {
-        let updatedLoan = {
-          id = loan.id;
-          userId = loan.userId;
-          amount = loan.amount;
-          interest = loan.interest;
-          status = #paid;
-          timestamp = loan.timestamp;
-        };
-        loans.remove(loanId);
-        loans.add(loanId, updatedLoan);
-        #ok(updatedLoan);
+        let updated : Loan = { id = loan.id; userId = loan.userId; amount = loan.amount; interest = loan.interest; status = #paid; timestamp = loan.timestamp };
+        loans.remove(loanId); loans.add(loanId, updated); #ok(updated);
       };
     };
   };
 
-  public shared ({ caller }) func resetMember(userId : Text) : async { #ok : Text; #err : Text } {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
-      return #err("Unauthorized: Only admins can reset members");
-    };
-
+  public shared func resetMember(adminUserId : Text, userId : Text) : async { #ok : Text; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
     switch (getUserById(userId)) {
-      case null { return #err("User not found") };
+      case null return #err("User not found");
       case (?user) {
-        let updatedUser = {
-          id = user.id;
-          name = user.name;
-          email = user.email;
-          passwordHash = user.passwordHash;
-          role = user.role;
-          savings = 0;
-          lastLogin = user.lastLogin;
-        };
-        users.remove(userId);
-        users.add(userId, updatedUser);
-
-        for ((loanId, loan) in loans.entries()) {
+        let updated : User = { id = user.id; name = user.name; email = user.email; passwordHash = user.passwordHash; role = user.role; savings = 0; lastLogin = user.lastLogin };
+        users.remove(userId); users.add(userId, updated);
+        for ((lid, loan) in loans.entries()) {
           if (loan.userId == userId) {
-            let updatedLoan = {
-              id = loan.id;
-              userId = loan.userId;
-              amount = loan.amount;
-              interest = loan.interest;
-              status = #paid;
-              timestamp = loan.timestamp;
-            };
-            loans.remove(loanId);
-            loans.add(loanId, updatedLoan);
+            let ul : Loan = { id = loan.id; userId = loan.userId; amount = loan.amount; interest = loan.interest; status = #paid; timestamp = loan.timestamp };
+            loans.remove(lid); loans.add(lid, ul);
           };
         };
-
         #ok("Member reset successfully");
       };
     };
   };
 
-  public query ({ caller }) func getTotalSavings() : async { #ok : Nat; #err : Text } {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
-      return #err("Unauthorized: Only admins can view total savings");
-    };
-
+  public query func getTotalSavings(adminUserId : Text) : async { #ok : Nat; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
     var total : Nat = 0;
-    for (user in users.values()) {
-      if (user.role == "member") {
-        total += user.savings;
-      };
-    };
+    for (u in users.values()) { if (u.role == "member") { total += u.savings } };
     #ok(total);
   };
 
-  public query ({ caller }) func getAllPendingLoans() : async { #ok : [Loan]; #err : Text } {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
-      return #err("Unauthorized: Only admins can view pending loans");
-    };
-
-    let pendingLoans = loans.values().filter(
-      func(loan) {
-        switch (loan.status) {
-          case (#pending) { true };
-          case (_) { false };
-        };
-      }
-    );
-    #ok(pendingLoans.toArray());
+  public query func getAllPendingLoans(adminUserId : Text) : async { #ok : [Loan]; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
+    #ok(loans.values().filter(func(l) { switch (l.status) { case (#pending) true; case (_) false } }).toArray());
   };
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can view profiles");
-    };
-
     switch (getCallerUserId(caller)) {
-      case null { null };
-      case (?userId) {
-        switch (getUserById(userId)) {
-          case null { null };
-          case (?user) {
-            ?{
-              id = user.id;
-              name = user.name;
-              email = user.email;
-              role = user.role;
-              savings = user.savings;
-              lastLogin = user.lastLogin;
-            };
-          };
+      case null null;
+      case (?uid) {
+        switch (getUserById(uid)) {
+          case null null;
+          case (?u) ?{ id = u.id; name = u.name; email = u.email; role = u.role; savings = u.savings; lastLogin = u.lastLogin };
         };
       };
     };
   };
 
   public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
-    if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Can only view your own profile");
-    };
-
+    if (caller != user and not isAdminCaller(caller)) { Runtime.trap("Unauthorized") };
     switch (principalToUserId.get(user)) {
-      case null { null };
-      case (?userId) {
-        switch (getUserById(userId)) {
-          case null { null };
-          case (?userRecord) {
-            ?{
-              id = userRecord.id;
-              name = userRecord.name;
-              email = userRecord.email;
-              role = userRecord.role;
-              savings = userRecord.savings;
-              lastLogin = userRecord.lastLogin;
-            };
-          };
+      case null null;
+      case (?uid) {
+        switch (getUserById(uid)) {
+          case null null;
+          case (?u) ?{ id = u.id; name = u.name; email = u.email; role = u.role; savings = u.savings; lastLogin = u.lastLogin };
         };
       };
     };
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can save profiles");
-    };
-
+    if (not isLoggedIn(caller)) Runtime.trap("Unauthorized");
     switch (getCallerUserId(caller)) {
-      case null { Runtime.trap("User not found") };
-      case (?userId) {
-        switch (getUserById(userId)) {
-          case null { Runtime.trap("User not found") };
-          case (?user) {
-            let updatedUser = {
-              id = user.id;
-              name = profile.name;
-              email = user.email;
-              passwordHash = user.passwordHash;
-              role = user.role;
-              savings = user.savings;
-              lastLogin = user.lastLogin;
-            };
-            users.remove(userId);
-            users.add(userId, updatedUser);
+      case null Runtime.trap("User not found");
+      case (?uid) {
+        switch (getUserById(uid)) {
+          case null Runtime.trap("User not found");
+          case (?u) {
+            let updated : User = { id = u.id; name = profile.name; email = u.email; passwordHash = u.passwordHash; role = u.role; savings = u.savings; lastLogin = u.lastLogin };
+            users.remove(uid); users.add(uid, updated);
           };
         };
       };

@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Leaf, Loader2 } from "lucide-react";
+import { Cpu, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { User } from "../backend.d";
@@ -64,13 +64,13 @@ export function LoginView({ onLogin, onNavigate }: Props) {
       >
         <div className="flex items-center gap-2 mb-3">
           <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-            <Leaf className="w-5 h-5 text-white" />
+            <Cpu className="w-5 h-5 text-white" />
           </div>
-          <span className="text-xl font-bold tracking-tight">
-            Together As One
-          </span>
+          <span className="text-xl font-bold tracking-tight">Sultantech</span>
         </div>
-        <p className="text-white/80 text-sm italic mt-1">"Unity is Strength"</p>
+        <p className="text-white/80 text-sm italic mt-1">
+          "World of Technology"
+        </p>
         <p className="text-white/60 text-xs mt-4">Savings Group Management</p>
       </div>
 
@@ -137,8 +137,7 @@ export function LoginView({ onLogin, onNavigate }: Props) {
         </Card>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
-          Admin? Use{" "}
-          <span className="font-mono text-xs">petermuchere@gmail.com</span>
+          Admin? Use <span className="font-mono text-xs">admin@gmail.com</span>
         </p>
       </div>
 

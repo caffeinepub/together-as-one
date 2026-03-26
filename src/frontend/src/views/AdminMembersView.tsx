@@ -9,10 +9,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ChevronRight,
   Loader2,
+  RefreshCw,
   Trash2,
   UserPlus,
   Users,
@@ -32,15 +34,27 @@ interface Props {
 }
 
 export function AdminMembersView({ onBack, onManageMember }: Props) {
-  const { data: members, isLoading } = useGetAllMembers();
+  const {
+    data: members,
+    isLoading,
+    error,
+    refetch,
+    isFetching,
+  } = useGetAllMembers();
   const addMutation = useAddMember();
   const removeMutation = useRemoveMember();
+  const qc = useQueryClient();
 
   const [addOpen, setAddOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [removingId, setRemovingId] = useState<string | null>(null);
+
+  const handleRefresh = async () => {
+    await qc.invalidateQueries({ queryKey: ["members"] });
+    await refetch();
+  };
 
   const handleAdd = async () => {
     if (!name || !email || !password) {
@@ -85,6 +99,18 @@ export function AdminMembersView({ onBack, onManageMember }: Props) {
         </Button>
         <h1 className="font-bold text-base flex-1">Members</h1>
         <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={handleRefresh}
+          disabled={isFetching || isLoading}
+          data-ocid="admin_members.secondary_button"
+        >
+          <RefreshCw
+            className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`}
+          />
+        </Button>
+        <Button
           size="sm"
           className="bg-primary text-primary-foreground hover:bg-primary/90 h-8 text-xs"
           onClick={() => setAddOpen(true)}
@@ -98,7 +124,11 @@ export function AdminMembersView({ onBack, onManageMember }: Props) {
         className="px-4 py-3 text-white text-sm"
         style={{ background: "linear-gradient(to right, #0B4A37, #C6A24D)" }}
       >
-        <p className="font-semibold">{members?.length ?? 0} Members</p>
+        <p className="font-semibold">
+          {isFetching && !members
+            ? "Loading..."
+            : `${members?.length ?? 0} Members`}
+        </p>
       </div>
 
       <main className="flex-1 px-4 py-4 space-y-2">
@@ -109,6 +139,18 @@ export function AdminMembersView({ onBack, onManageMember }: Props) {
           >
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
+        ) : error ? (
+          <div className="text-center py-12">
+            <p className="text-destructive text-sm font-medium mb-2">
+              Failed to load members
+            </p>
+            <p className="text-xs text-muted-foreground mb-4">
+              {(error as Error).message}
+            </p>
+            <Button size="sm" variant="outline" onClick={handleRefresh}>
+              <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Retry
+            </Button>
+          </div>
         ) : !members || members.length === 0 ? (
           <div
             className="text-center py-12 text-muted-foreground"
@@ -116,6 +158,14 @@ export function AdminMembersView({ onBack, onManageMember }: Props) {
           >
             <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p className="font-medium">No members yet</p>
+            <p className="text-xs mt-1">
+              Members who register will appear here
+            </p>
+            {isFetching && (
+              <p className="text-xs mt-2 text-primary">
+                Checking for new members...
+              </p>
+            )}
           </div>
         ) : (
           members.map((m, i) => (
