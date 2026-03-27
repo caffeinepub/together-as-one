@@ -29,6 +29,7 @@ actor {
   type MemberSummary = { id : Text; name : Text; email : Text; savings : Nat; loanCount : Nat };
   type MemberDetail = { user : User; transactions : [Transaction]; loans : [Loan] };
   type UserProfile = { id : Text; name : Text; email : Text; role : Text; savings : Nat; lastLogin : Int };
+  type BroadcastNotification = { id : Text; title : Text; body : Text; timestamp : Int };
 
   stable var stableUsers : [(Text, User)] = [];
   stable var stableEmailToUserId : [(Text, Text)] = [];
@@ -39,6 +40,7 @@ actor {
   stable var stableWithdrawalRequests : [(Text, WithdrawalRequest)] = [];
   stable var stableLoanPayments : [(Text, LoanPayment)] = [];
   stable var stableMonthlyContributions : [(Text, MonthlyContribution)] = [];
+  stable var stableBroadcastNotifications : [(Text, BroadcastNotification)] = [];
   stable var adminInitialized : Bool = false;
   stable var adminId : Text = "";
   stable var adminUser : User = { id = ""; name = ""; email = ""; passwordHash = ""; role = ""; savings = 0; lastLogin = 0 };
@@ -53,6 +55,7 @@ actor {
   let withdrawalRequests = Map.empty<Text, WithdrawalRequest>();
   let loanPayments = Map.empty<Text, LoanPayment>();
   let monthlyContributions = Map.empty<Text, MonthlyContribution>();
+  let broadcastNotifications = Map.empty<Text, BroadcastNotification>();
 
   stable var nextUserId : Nat = 1;
   stable var nextTransactionId : Nat = 1;
@@ -61,6 +64,7 @@ actor {
   stable var nextWithdrawalRequestId : Nat = 1;
   stable var nextLoanPaymentId : Nat = 1;
   stable var nextContributionId : Nat = 1;
+  stable var nextBroadcastId : Nat = 1;
 
   let ADMIN_EMAIL = "admin@gmail.com";
   let ADMIN_PASSWORD = "admin123";
@@ -74,6 +78,7 @@ actor {
   func generateWithdrawalRequestId() : Text { let id = nextWithdrawalRequestId.toText(); nextWithdrawalRequestId += 1; "wr" # id };
   func generateLoanPaymentId() : Text { let id = nextLoanPaymentId.toText(); nextLoanPaymentId += 1; "lp" # id };
   func generateContributionId() : Text { let id = nextContributionId.toText(); nextContributionId += 1; "mc" # id };
+  func generateBroadcastId() : Text { let id = nextBroadcastId.toText(); nextBroadcastId += 1; "bn" # id };
 
   func getUserByEmail(email : Text) : ?User {
     switch (emailToUserId.get(email)) {
@@ -81,7 +86,6 @@ actor {
         switch (users.get(uid)) {
           case (?u) ?u;
           case null {
-            // emailToUserId out of sync — fallback linear scan
             var found : ?User = null;
             for (u in users.values()) { if (u.email == email) { found := ?u } };
             found
@@ -89,7 +93,6 @@ actor {
         };
       };
       case null {
-        // emailToUserId missing entry — fallback linear scan and repair
         var found : ?User = null;
         for (u in users.values()) { if (u.email == email) { found := ?u } };
         switch (found) {
@@ -150,6 +153,7 @@ actor {
     stableWithdrawalRequests := withdrawalRequests.entries().toArray();
     stableLoanPayments := loanPayments.entries().toArray();
     stableMonthlyContributions := monthlyContributions.entries().toArray();
+    stableBroadcastNotifications := broadcastNotifications.entries().toArray();
   };
 
   system func postupgrade() {
@@ -162,10 +166,25 @@ actor {
     for ((k, v) in stableWithdrawalRequests.vals()) { withdrawalRequests.remove(k); withdrawalRequests.add(k, v) };
     for ((k, v) in stableLoanPayments.vals()) { loanPayments.remove(k); loanPayments.add(k, v) };
     for ((k, v) in stableMonthlyContributions.vals()) { monthlyContributions.remove(k); monthlyContributions.add(k, v) };
+    for ((k, v) in stableBroadcastNotifications.vals()) { broadcastNotifications.remove(k); broadcastNotifications.add(k, v) };
     ensureAdminExists();
   };
 
   ensureAdminExists();
+
+  // ── Broadcast Notifications ──────────────────────────────────────────────
+  public shared func sendBroadcastNotification(adminUserId : Text, title : Text, body : Text) : async { #ok : BroadcastNotification; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
+    let bid = generateBroadcastId();
+    let bn : BroadcastNotification = { id = bid; title = title; body = body; timestamp = Time.now() };
+    broadcastNotifications.add(bid, bn);
+    #ok(bn);
+  };
+
+  public query func getBroadcastNotifications() : async [BroadcastNotification] {
+    broadcastNotifications.values().toArray();
+  };
+  // ────────────────────────────────────────────────────────────────────────
 
   public shared func register(name : Text, email : Text, password : Text) : async { #ok : User; #err : Text } {
     if (email == ADMIN_EMAIL) return #err("This email is reserved");
@@ -329,7 +348,6 @@ actor {
     };
   };
 
-  // Loan repayment: member makes a partial payment toward an approved loan
   public shared func makeRepayment(userId : Text, loanId : Text, amount : Nat) : async { #ok : LoanPayment; #err : Text } {
     switch (getUserById(userId)) {
       case null return #err("User not found");
@@ -350,7 +368,6 @@ actor {
             let pid = generateLoanPaymentId();
             let payment : LoanPayment = { id = pid; loanId = loanId; userId = userId; amount = actualAmount; timestamp = Time.now() };
             loanPayments.add(pid, payment);
-            // Auto-mark as paid if fully repaid
             if (alreadyPaid + actualAmount >= totalOwed) {
               let updated : Loan = { id = loan.id; userId = loan.userId; amount = loan.amount; interest = loan.interest; status = #paid; timestamp = loan.timestamp };
               loans.remove(loanId); loans.add(loanId, updated);
@@ -370,7 +387,6 @@ actor {
     #ok(loanPayments.values().filter(func(p) { p.userId == userId }).toArray());
   };
 
-  // Withdrawal requests
   public shared func requestWithdrawal(userId : Text, amount : Nat, note : Text) : async { #ok : WithdrawalRequest; #err : Text } {
     switch (getUserById(userId)) {
       case null return #err("User not found");
@@ -430,7 +446,6 @@ actor {
     };
   };
 
-  // Monthly contributions
   public shared func setMonthlyContributionAmount(adminUserId : Text, amount : Nat) : async { #ok : Nat; #err : Text } {
     if (not isAdminById(adminUserId)) return #err("Unauthorized");
     monthlyContributionTarget := amount;

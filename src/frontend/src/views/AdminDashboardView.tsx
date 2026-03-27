@@ -1,6 +1,13 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
   ArrowDownCircle,
   Bell,
   Calculator,
@@ -9,11 +16,14 @@ import {
   Download,
   FileText,
   LogOut,
+  Send,
   TrendingUp,
   Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { NotificationPanel } from "../components/NotificationPanel";
+import { useActor } from "../hooks/useActor";
 import { useNotifications } from "../hooks/useNotifications";
 import {
   useGetAllMembers,
@@ -30,15 +40,32 @@ interface Props {
   onNavigate: (view: ViewType) => void;
 }
 
+function getStoredAdminId(): string {
+  try {
+    const stored = localStorage.getItem("tao_user");
+    if (!stored) return "";
+    return (JSON.parse(stored) as { id: string }).id ?? "";
+  } catch {
+    return "";
+  }
+}
+
 export function AdminDashboardView({ user, onLogout, onNavigate }: Props) {
   const { data: members } = useGetAllMembers();
   const { data: totalSavings } = useGetTotalSavings();
   const { data: pendingLoans } = useGetAllPendingLoans();
   const { data: pendingDeposits } = useGetAllPendingDeposits();
+  const { actor } = useActor();
 
   const [notifOpen, setNotifOpen] = useState(false);
   const { unreadCount, requestPermission } = useNotifications(user.id);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
+
+  // Broadcast notification dialog state
+  const [broadcastOpen, setBroadcastOpen] = useState(false);
+  const [broadcastTitle, setBroadcastTitle] = useState("");
+  const [broadcastBody, setBroadcastBody] = useState("");
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     requestPermission();
@@ -57,6 +84,38 @@ export function AdminDashboardView({ user, onLogout, onNavigate }: Props) {
     if (!installPrompt) return;
     installPrompt.prompt();
     setInstallPrompt(null);
+  };
+
+  const handleSendBroadcast = async () => {
+    if (!broadcastTitle.trim() || !broadcastBody.trim()) {
+      toast.error("Please enter both a title and message.");
+      return;
+    }
+    if (!actor) {
+      toast.error("Not connected to server.");
+      return;
+    }
+    setSending(true);
+    try {
+      const adminId = getStoredAdminId();
+      const res = await (actor as any).sendBroadcastNotification(
+        adminId,
+        broadcastTitle.trim(),
+        broadcastBody.trim(),
+      );
+      if (res.__kind__ === "err") {
+        toast.error(res.err);
+      } else {
+        toast.success("Notification sent to all members!");
+        setBroadcastTitle("");
+        setBroadcastBody("");
+        setBroadcastOpen(false);
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to send notification.");
+    } finally {
+      setSending(false);
+    }
   };
 
   const stats = [
@@ -228,6 +287,27 @@ export function AdminDashboardView({ user, onLogout, onNavigate }: Props) {
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
           </button>
 
+          {/* Send Notification to All Members */}
+          <button
+            type="button"
+            className="w-full bg-card rounded-xl px-4 py-4 shadow-card flex items-center justify-between hover:shadow-card-md transition"
+            onClick={() => setBroadcastOpen(true)}
+            data-ocid="admin.link"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center">
+                <Send className="w-4 h-4 text-blue-600" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-semibold">Send Notification</p>
+                <p className="text-xs text-muted-foreground">
+                  Broadcast a message to all members
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          </button>
+
           <button
             type="button"
             className="w-full bg-card rounded-xl px-4 py-4 shadow-card flex items-center justify-between hover:shadow-card-md transition"
@@ -275,7 +355,66 @@ export function AdminDashboardView({ user, onLogout, onNavigate }: Props) {
         </div>
       </main>
 
-      {/* ─── NOTIFICATION PANEL ─── */}
+      {/* Broadcast Notification Dialog */}
+      <Dialog open={broadcastOpen} onOpenChange={setBroadcastOpen}>
+        <DialogContent className="max-w-sm mx-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="w-4 h-4 text-blue-600" />
+              Send Notification to All Members
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1">
+                Title
+              </p>
+              <Input
+                placeholder="e.g. Meeting Reminder"
+                value={broadcastTitle}
+                onChange={(e) => setBroadcastTitle(e.target.value)}
+                maxLength={100}
+              />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1">
+                Message
+              </p>
+              <textarea
+                className="w-full border rounded-md px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary min-h-[90px]"
+                placeholder="Type your message here..."
+                value={broadcastBody}
+                onChange={(e) => setBroadcastBody(e.target.value)}
+                maxLength={500}
+              />
+              <p className="text-[10px] text-muted-foreground text-right">
+                {broadcastBody.length}/500
+              </p>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setBroadcastOpen(false)}
+                disabled={sending}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 bg-primary text-white"
+                onClick={handleSendBroadcast}
+                disabled={
+                  sending || !broadcastTitle.trim() || !broadcastBody.trim()
+                }
+              >
+                {sending ? "Sending..." : "Send to All"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* NOTIFICATION PANEL */}
       <NotificationPanel
         userId={user.id}
         open={notifOpen}

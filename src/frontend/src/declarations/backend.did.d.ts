@@ -66,6 +66,38 @@ export interface UserProfile {
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
   { 'guest' : null };
+export interface LoanPayment {
+  'id' : string,
+  'loanId' : string,
+  'userId' : string,
+  'amount' : bigint,
+  'timestamp' : bigint,
+}
+export type WithdrawalStatus = { 'pending' : null } |
+  { 'approved' : null } |
+  { 'rejected' : null };
+export interface WithdrawalRequest {
+  'id' : string,
+  'status' : WithdrawalStatus,
+  'userId' : string,
+  'timestamp' : bigint,
+  'amount' : bigint,
+  'note' : string,
+}
+export interface MonthlyContribution {
+  'id' : string,
+  'userId' : string,
+  'month' : bigint,
+  'year' : bigint,
+  'amount' : bigint,
+  'timestamp' : bigint,
+}
+export interface BroadcastNotification {
+  'id' : string,
+  'title' : string,
+  'body' : string,
+  'timestamp' : bigint,
+}
 export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'addMember' : ActorMethod<
@@ -138,6 +170,21 @@ export interface _SERVICE {
     { 'ok' : Loan } | { 'err' : string }
   >,
   'resetMember' : ActorMethod<[string, string], { 'ok' : string } | { 'err' : string }>,
+  'makeRepayment' : ActorMethod<[string, string, bigint], { 'ok' : LoanPayment } | { 'err' : string }>,
+  'getLoanPayments' : ActorMethod<[string], { 'ok' : Array<LoanPayment> } | { 'err' : string }>,
+  'getMyLoanPayments' : ActorMethod<[string], { 'ok' : Array<LoanPayment> } | { 'err' : string }>,
+  'requestWithdrawal' : ActorMethod<[string, bigint, string], { 'ok' : WithdrawalRequest } | { 'err' : string }>,
+  'approveWithdrawal' : ActorMethod<[string, string], { 'ok' : WithdrawalRequest } | { 'err' : string }>,
+  'rejectWithdrawal' : ActorMethod<[string, string], { 'ok' : WithdrawalRequest } | { 'err' : string }>,
+  'getAllPendingWithdrawals' : ActorMethod<[string], { 'ok' : Array<WithdrawalRequest> } | { 'err' : string }>,
+  'getMyWithdrawalRequests' : ActorMethod<[string], { 'ok' : Array<WithdrawalRequest> } | { 'err' : string }>,
+  'setMonthlyContributionAmount' : ActorMethod<[string, bigint], { 'ok' : bigint } | { 'err' : string }>,
+  'getMonthlyContributionAmount' : ActorMethod<[], bigint>,
+  'recordContribution' : ActorMethod<[string, string, bigint, bigint, bigint], { 'ok' : MonthlyContribution } | { 'err' : string }>,
+  'getContributionSummary' : ActorMethod<[string, bigint, bigint], { 'ok' : Array<MonthlyContribution> } | { 'err' : string }>,
+  'getMyContributions' : ActorMethod<[string], { 'ok' : Array<MonthlyContribution> } | { 'err' : string }>,
+  'sendBroadcastNotification' : ActorMethod<[string, string, string], { 'ok' : BroadcastNotification } | { 'err' : string }>,
+  'getBroadcastNotifications' : ActorMethod<[], Array<BroadcastNotification>>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;

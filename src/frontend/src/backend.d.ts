@@ -80,6 +80,12 @@ export interface Transaction {
     timestamp: bigint;
     amount: bigint;
 }
+export interface BroadcastNotification {
+    id: string;
+    title: string;
+    body: string;
+    timestamp: bigint;
+}
 export enum LoanStatus {
     pending = "pending",
     paid = "paid",
@@ -144,4 +150,6 @@ export interface backendInterface {
     recordContribution(adminId: string, userId: string, month: bigint, year: bigint, amount: bigint): Promise<{ __kind__: "ok"; ok: MonthlyContribution } | { __kind__: "err"; err: string }>;
     getContributionSummary(adminId: string, month: bigint, year: bigint): Promise<{ __kind__: "ok"; ok: Array<MonthlyContribution> } | { __kind__: "err"; err: string }>;
     getMyContributions(userId: string): Promise<{ __kind__: "ok"; ok: Array<MonthlyContribution> } | { __kind__: "err"; err: string }>;
+    sendBroadcastNotification(adminId: string, title: string, body: string): Promise<{ __kind__: "ok"; ok: BroadcastNotification } | { __kind__: "err"; err: string }>;
+    getBroadcastNotifications(): Promise<Array<BroadcastNotification>>;
 }

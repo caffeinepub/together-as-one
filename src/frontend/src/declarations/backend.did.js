@@ -71,6 +71,41 @@ export const MemberDetail = IDL.Record({
   'transactions' : IDL.Vec(Transaction),
 });
 
+export const LoanPayment = IDL.Record({
+  'id' : IDL.Text,
+  'loanId' : IDL.Text,
+  'userId' : IDL.Text,
+  'amount' : IDL.Nat,
+  'timestamp' : IDL.Int,
+});
+export const WithdrawalStatus = IDL.Variant({
+  'pending' : IDL.Null,
+  'approved' : IDL.Null,
+  'rejected' : IDL.Null,
+});
+export const WithdrawalRequest = IDL.Record({
+  'id' : IDL.Text,
+  'status' : WithdrawalStatus,
+  'userId' : IDL.Text,
+  'amount' : IDL.Nat,
+  'timestamp' : IDL.Int,
+  'note' : IDL.Text,
+});
+export const MonthlyContribution = IDL.Record({
+  'id' : IDL.Text,
+  'userId' : IDL.Text,
+  'month' : IDL.Nat,
+  'year' : IDL.Nat,
+  'amount' : IDL.Nat,
+  'timestamp' : IDL.Int,
+});
+export const BroadcastNotification = IDL.Record({
+  'id' : IDL.Text,
+  'title' : IDL.Text,
+  'body' : IDL.Text,
+  'timestamp' : IDL.Int,
+});
+
 export const idlService = IDL.Service({
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
   'addMember' : IDL.Func(
@@ -196,6 +231,81 @@ export const idlService = IDL.Service({
       [IDL.Text, IDL.Text],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
+    ),
+  'makeRepayment' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Nat],
+      [IDL.Variant({ 'ok' : LoanPayment, 'err' : IDL.Text })],
+      [],
+    ),
+  'getLoanPayments' : IDL.Func(
+      [IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Vec(LoanPayment), 'err' : IDL.Text })],
+      ['query'],
+    ),
+  'getMyLoanPayments' : IDL.Func(
+      [IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Vec(LoanPayment), 'err' : IDL.Text })],
+      ['query'],
+    ),
+  'requestWithdrawal' : IDL.Func(
+      [IDL.Text, IDL.Nat, IDL.Text],
+      [IDL.Variant({ 'ok' : WithdrawalRequest, 'err' : IDL.Text })],
+      [],
+    ),
+  'approveWithdrawal' : IDL.Func(
+      [IDL.Text, IDL.Text],
+      [IDL.Variant({ 'ok' : WithdrawalRequest, 'err' : IDL.Text })],
+      [],
+    ),
+  'rejectWithdrawal' : IDL.Func(
+      [IDL.Text, IDL.Text],
+      [IDL.Variant({ 'ok' : WithdrawalRequest, 'err' : IDL.Text })],
+      [],
+    ),
+  'getAllPendingWithdrawals' : IDL.Func(
+      [IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Vec(WithdrawalRequest), 'err' : IDL.Text })],
+      ['query'],
+    ),
+  'getMyWithdrawalRequests' : IDL.Func(
+      [IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Vec(WithdrawalRequest), 'err' : IDL.Text })],
+      ['query'],
+    ),
+  'setMonthlyContributionAmount' : IDL.Func(
+      [IDL.Text, IDL.Nat],
+      [IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text })],
+      [],
+    ),
+  'getMonthlyContributionAmount' : IDL.Func(
+      [],
+      [IDL.Nat],
+      ['query'],
+    ),
+  'recordContribution' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Nat, IDL.Nat, IDL.Nat],
+      [IDL.Variant({ 'ok' : MonthlyContribution, 'err' : IDL.Text })],
+      [],
+    ),
+  'getContributionSummary' : IDL.Func(
+      [IDL.Text, IDL.Nat, IDL.Nat],
+      [IDL.Variant({ 'ok' : IDL.Vec(MonthlyContribution), 'err' : IDL.Text })],
+      ['query'],
+    ),
+  'getMyContributions' : IDL.Func(
+      [IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Vec(MonthlyContribution), 'err' : IDL.Text })],
+      ['query'],
+    ),
+  'sendBroadcastNotification' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Variant({ 'ok' : BroadcastNotification, 'err' : IDL.Text })],
+      [],
+    ),
+  'getBroadcastNotifications' : IDL.Func(
+      [],
+      [IDL.Vec(BroadcastNotification)],
+      ['query'],
     ),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
 });
@@ -395,6 +505,81 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Text, IDL.Text],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
+      ),
+    'makeRepayment' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Nat],
+        [IDL.Variant({ 'ok' : LoanPayment, 'err' : IDL.Text })],
+        [],
+      ),
+    'getLoanPayments' : IDL.Func(
+        [IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Vec(LoanPayment), 'err' : IDL.Text })],
+        ['query'],
+      ),
+    'getMyLoanPayments' : IDL.Func(
+        [IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Vec(LoanPayment), 'err' : IDL.Text })],
+        ['query'],
+      ),
+    'requestWithdrawal' : IDL.Func(
+        [IDL.Text, IDL.Nat, IDL.Text],
+        [IDL.Variant({ 'ok' : WithdrawalRequest, 'err' : IDL.Text })],
+        [],
+      ),
+    'approveWithdrawal' : IDL.Func(
+        [IDL.Text, IDL.Text],
+        [IDL.Variant({ 'ok' : WithdrawalRequest, 'err' : IDL.Text })],
+        [],
+      ),
+    'rejectWithdrawal' : IDL.Func(
+        [IDL.Text, IDL.Text],
+        [IDL.Variant({ 'ok' : WithdrawalRequest, 'err' : IDL.Text })],
+        [],
+      ),
+    'getAllPendingWithdrawals' : IDL.Func(
+        [IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Vec(WithdrawalRequest), 'err' : IDL.Text })],
+        ['query'],
+      ),
+    'getMyWithdrawalRequests' : IDL.Func(
+        [IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Vec(WithdrawalRequest), 'err' : IDL.Text })],
+        ['query'],
+      ),
+    'setMonthlyContributionAmount' : IDL.Func(
+        [IDL.Text, IDL.Nat],
+        [IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text })],
+        [],
+      ),
+    'getMonthlyContributionAmount' : IDL.Func(
+        [],
+        [IDL.Nat],
+        ['query'],
+      ),
+    'recordContribution' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Nat, IDL.Nat, IDL.Nat],
+        [IDL.Variant({ 'ok' : MonthlyContribution, 'err' : IDL.Text })],
+        [],
+      ),
+    'getContributionSummary' : IDL.Func(
+        [IDL.Text, IDL.Nat, IDL.Nat],
+        [IDL.Variant({ 'ok' : IDL.Vec(MonthlyContribution), 'err' : IDL.Text })],
+        ['query'],
+      ),
+    'getMyContributions' : IDL.Func(
+        [IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Vec(MonthlyContribution), 'err' : IDL.Text })],
+        ['query'],
+      ),
+    'sendBroadcastNotification' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Variant({ 'ok' : BroadcastNotification, 'err' : IDL.Text })],
+        [],
+      ),
+    'getBroadcastNotifications' : IDL.Func(
+        [],
+        [IDL.Vec(BroadcastNotification)],
+        ['query'],
       ),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
   });

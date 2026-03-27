@@ -325,7 +325,7 @@ export interface backendInterface {
     }>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
 }
-import type { DepositRequest as _DepositRequest, DepositStatus as _DepositStatus, Loan as _Loan, LoanStatus as _LoanStatus, MemberDetail as _MemberDetail, MemberSummary as _MemberSummary, Transaction as _Transaction, User as _User, UserProfile as _UserProfile, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
+import type { BroadcastNotification as _BroadcastNotification, DepositRequest as _DepositRequest, DepositStatus as _DepositStatus, Loan as _Loan, LoanPayment as _LoanPayment, LoanStatus as _LoanStatus, MemberDetail as _MemberDetail, MemberSummary as _MemberSummary, MonthlyContribution as _MonthlyContribution, Transaction as _Transaction, User as _User, UserProfile as _UserProfile, UserRole as _UserRole, WithdrawalRequest as _WithdrawalRequest, WithdrawalStatus as _WithdrawalStatus } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
     async _initializeAccessControlWithSecret(arg0: string): Promise<void> {
@@ -884,6 +884,167 @@ export class Backend implements backendInterface {
         } else {
             const result = await this.actor.saveCallerUserProfile(arg0);
             return result;
+        }
+    }
+    async makeRepayment(arg0: string, arg1: string, arg2: bigint): Promise<{ __kind__: "ok"; ok: LoanPayment } | { __kind__: "err"; err: string }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.makeRepayment(arg0, arg1, arg2);
+                return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as LoanPayment } : { __kind__: "err", err: result.err };
+            } catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else {
+            const result = await this.actor.makeRepayment(arg0, arg1, arg2);
+            return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as LoanPayment } : { __kind__: "err", err: result.err };
+        }
+    }
+    async getLoanPayments(arg0: string): Promise<{ __kind__: "ok"; ok: Array<LoanPayment> } | { __kind__: "err"; err: string }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getLoanPayments(arg0);
+                return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as Array<LoanPayment> } : { __kind__: "err", err: result.err };
+            } catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else {
+            const result = await this.actor.getLoanPayments(arg0);
+            return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as Array<LoanPayment> } : { __kind__: "err", err: result.err };
+        }
+    }
+    async getMyLoanPayments(arg0: string): Promise<{ __kind__: "ok"; ok: Array<LoanPayment> } | { __kind__: "err"; err: string }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getMyLoanPayments(arg0);
+                return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as Array<LoanPayment> } : { __kind__: "err", err: result.err };
+            } catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else {
+            const result = await this.actor.getMyLoanPayments(arg0);
+            return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as Array<LoanPayment> } : { __kind__: "err", err: result.err };
+        }
+    }
+    async requestWithdrawal(arg0: string, arg1: bigint, arg2: string): Promise<{ __kind__: "ok"; ok: WithdrawalRequest } | { __kind__: "err"; err: string }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.requestWithdrawal(arg0, arg1, arg2);
+                return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as WithdrawalRequest } : { __kind__: "err", err: result.err };
+            } catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else {
+            const result = await this.actor.requestWithdrawal(arg0, arg1, arg2);
+            return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as WithdrawalRequest } : { __kind__: "err", err: result.err };
+        }
+    }
+    async approveWithdrawal(arg0: string, arg1: string): Promise<{ __kind__: "ok"; ok: WithdrawalRequest } | { __kind__: "err"; err: string }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.approveWithdrawal(arg0, arg1);
+                return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as WithdrawalRequest } : { __kind__: "err", err: result.err };
+            } catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else {
+            const result = await this.actor.approveWithdrawal(arg0, arg1);
+            return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as WithdrawalRequest } : { __kind__: "err", err: result.err };
+        }
+    }
+    async rejectWithdrawal(arg0: string, arg1: string): Promise<{ __kind__: "ok"; ok: WithdrawalRequest } | { __kind__: "err"; err: string }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.rejectWithdrawal(arg0, arg1);
+                return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as WithdrawalRequest } : { __kind__: "err", err: result.err };
+            } catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else {
+            const result = await this.actor.rejectWithdrawal(arg0, arg1);
+            return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as WithdrawalRequest } : { __kind__: "err", err: result.err };
+        }
+    }
+    async getAllPendingWithdrawals(arg0: string): Promise<{ __kind__: "ok"; ok: Array<WithdrawalRequest> } | { __kind__: "err"; err: string }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getAllPendingWithdrawals(arg0);
+                return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as Array<WithdrawalRequest> } : { __kind__: "err", err: result.err };
+            } catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else {
+            const result = await this.actor.getAllPendingWithdrawals(arg0);
+            return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as Array<WithdrawalRequest> } : { __kind__: "err", err: result.err };
+        }
+    }
+    async getMyWithdrawalRequests(arg0: string): Promise<{ __kind__: "ok"; ok: Array<WithdrawalRequest> } | { __kind__: "err"; err: string }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getMyWithdrawalRequests(arg0);
+                return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as Array<WithdrawalRequest> } : { __kind__: "err", err: result.err };
+            } catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else {
+            const result = await this.actor.getMyWithdrawalRequests(arg0);
+            return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as Array<WithdrawalRequest> } : { __kind__: "err", err: result.err };
+        }
+    }
+    async setMonthlyContributionAmount(arg0: string, arg1: bigint): Promise<{ __kind__: "ok"; ok: bigint } | { __kind__: "err"; err: string }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.setMonthlyContributionAmount(arg0, arg1);
+                return "ok" in result ? { __kind__: "ok", ok: result.ok } : { __kind__: "err", err: result.err };
+            } catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else {
+            const result = await this.actor.setMonthlyContributionAmount(arg0, arg1);
+            return "ok" in result ? { __kind__: "ok", ok: result.ok } : { __kind__: "err", err: result.err };
+        }
+    }
+    async getMonthlyContributionAmount(): Promise<bigint> {
+        if (this.processError) {
+            try {
+                return await this.actor.getMonthlyContributionAmount();
+            } catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else {
+            return await this.actor.getMonthlyContributionAmount();
+        }
+    }
+    async recordContribution(arg0: string, arg1: string, arg2: bigint, arg3: bigint, arg4: bigint): Promise<{ __kind__: "ok"; ok: MonthlyContribution } | { __kind__: "err"; err: string }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.recordContribution(arg0, arg1, arg2, arg3, arg4);
+                return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as MonthlyContribution } : { __kind__: "err", err: result.err };
+            } catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else {
+            const result = await this.actor.recordContribution(arg0, arg1, arg2, arg3, arg4);
+            return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as MonthlyContribution } : { __kind__: "err", err: result.err };
+        }
+    }
+    async getContributionSummary(arg0: string, arg1: bigint, arg2: bigint): Promise<{ __kind__: "ok"; ok: Array<MonthlyContribution> } | { __kind__: "err"; err: string }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getContributionSummary(arg0, arg1, arg2);
+                return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as Array<MonthlyContribution> } : { __kind__: "err", err: result.err };
+            } catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else {
+            const result = await this.actor.getContributionSummary(arg0, arg1, arg2);
+            return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as Array<MonthlyContribution> } : { __kind__: "err", err: result.err };
+        }
+    }
+    async getMyContributions(arg0: string): Promise<{ __kind__: "ok"; ok: Array<MonthlyContribution> } | { __kind__: "err"; err: string }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getMyContributions(arg0);
+                return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as Array<MonthlyContribution> } : { __kind__: "err", err: result.err };
+            } catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else {
+            const result = await this.actor.getMyContributions(arg0);
+            return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as Array<MonthlyContribution> } : { __kind__: "err", err: result.err };
+        }
+    }
+    async sendBroadcastNotification(arg0: string, arg1: string, arg2: string): Promise<{ __kind__: "ok"; ok: BroadcastNotification } | { __kind__: "err"; err: string }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.sendBroadcastNotification(arg0, arg1, arg2);
+                return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as BroadcastNotification } : { __kind__: "err", err: result.err };
+            } catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else {
+            const result = await this.actor.sendBroadcastNotification(arg0, arg1, arg2);
+            return "ok" in result ? { __kind__: "ok", ok: result.ok as unknown as BroadcastNotification } : { __kind__: "err", err: result.err };
+        }
+    }
+    async getBroadcastNotifications(): Promise<Array<BroadcastNotification>> {
+        if (this.processError) {
+            try {
+                return await this.actor.getBroadcastNotifications() as unknown as Array<BroadcastNotification>;
+            } catch (e) { this.processError(e); throw new Error("unreachable"); }
+        } else {
+            return await this.actor.getBroadcastNotifications() as unknown as Array<BroadcastNotification>;
         }
     }
 }
