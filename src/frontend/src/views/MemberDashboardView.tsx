@@ -13,6 +13,7 @@ import {
   ArrowDownCircle,
   ArrowRight,
   Bell,
+  Calculator,
   CheckCircle2,
   Clock,
   CreditCard,
@@ -280,30 +281,42 @@ export function MemberDashboardView({ user, onLogout, onNavigate }: Props) {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <button
             type="button"
             onClick={() => onNavigate("transactions")}
-            className="bg-card rounded-xl p-4 shadow-card text-left flex flex-col gap-2 hover:shadow-card-md transition"
+            className="bg-card rounded-xl p-3 shadow-card text-left flex flex-col gap-1.5 hover:shadow-card-md transition"
             data-ocid="member.link"
           >
             <FileText className="w-5 h-5 text-primary" />
-            <p className="text-sm font-semibold text-foreground">
+            <p className="text-xs font-semibold text-foreground leading-tight">
               Transactions
             </p>
-            <p className="text-xs text-muted-foreground">View history</p>
-            <ArrowRight className="w-3.5 h-3.5 text-muted-foreground mt-1" />
+            <ArrowRight className="w-3 h-3 text-muted-foreground" />
           </button>
           <button
             type="button"
             onClick={() => onNavigate("my-loans")}
-            className="bg-card rounded-xl p-4 shadow-card text-left flex flex-col gap-2 hover:shadow-card-md transition"
+            className="bg-card rounded-xl p-3 shadow-card text-left flex flex-col gap-1.5 hover:shadow-card-md transition"
             data-ocid="member.link"
           >
             <TrendingUp className="w-5 h-5 text-accent" />
-            <p className="text-sm font-semibold text-foreground">My Loans</p>
-            <p className="text-xs text-muted-foreground">View all loans</p>
-            <ArrowRight className="w-3.5 h-3.5 text-muted-foreground mt-1" />
+            <p className="text-xs font-semibold text-foreground leading-tight">
+              My Loans
+            </p>
+            <ArrowRight className="w-3 h-3 text-muted-foreground" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate("calculator")}
+            className="bg-card rounded-xl p-3 shadow-card text-left flex flex-col gap-1.5 hover:shadow-card-md transition"
+            data-ocid="member.link"
+          >
+            <Calculator className="w-5 h-5 text-primary" />
+            <p className="text-xs font-semibold text-foreground leading-tight">
+              Calculator
+            </p>
+            <ArrowRight className="w-3 h-3 text-muted-foreground" />
           </button>
         </div>
 

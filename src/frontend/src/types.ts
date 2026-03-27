@@ -6,6 +6,7 @@ export type ViewType =
   | "my-loans"
   | "my-withdrawals"
   | "my-contributions"
+  | "calculator"
   | "admin-dashboard"
   | "admin-members"
   | "admin-member-detail"

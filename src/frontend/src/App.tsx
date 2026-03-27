@@ -6,6 +6,7 @@ import { AdminMemberDetailView } from "./views/AdminMemberDetailView";
 import { AdminMembersView } from "./views/AdminMembersView";
 import { AdminPendingDepositsView } from "./views/AdminPendingDepositsView";
 import { AdminPendingLoansView } from "./views/AdminPendingLoansView";
+import { CalculatorView } from "./views/CalculatorView";
 import { LoginView } from "./views/LoginView";
 import { MemberDashboardView } from "./views/MemberDashboardView";
 import { MyLoansView } from "./views/MyLoansView";
@@ -86,6 +87,17 @@ export default function App() {
           <MyLoansView
             userId={currentUser.id}
             onBack={() => navigate("member-dashboard")}
+          />
+        )}
+        {currentView === "calculator" && (
+          <CalculatorView
+            onBack={() =>
+              navigate(
+                currentUser?.role === "admin"
+                  ? "admin-dashboard"
+                  : "member-dashboard",
+              )
+            }
           />
         )}
         {currentView === "admin-dashboard" && currentUser && (

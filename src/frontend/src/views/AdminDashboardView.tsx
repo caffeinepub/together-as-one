@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   ArrowDownCircle,
   Bell,
+  Calculator,
   ChevronRight,
   Clock,
   Download,
@@ -246,6 +247,26 @@ export function AdminDashboardView({ user, onLogout, onNavigate }: Props) {
                 <p className="text-sm font-semibold">Group Constitution</p>
                 <p className="text-xs text-muted-foreground">
                   Download PDF document
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          </button>
+
+          <button
+            type="button"
+            className="w-full bg-card rounded-xl px-4 py-4 shadow-card flex items-center justify-between hover:shadow-card-md transition"
+            onClick={() => onNavigate("calculator")}
+            data-ocid="admin.link"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
+                <Calculator className="w-4 h-4 text-primary" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-semibold">Calculator</p>
+                <p className="text-xs text-muted-foreground">
+                  Loan &amp; savings calculator
                 </p>
               </div>
             </div>
