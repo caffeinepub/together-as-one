@@ -3,6 +3,7 @@ import type {
   DepositRequest,
   backendInterface as ExtendedBackendInterface,
   Loan,
+  LoanPayment,
   MemberDetail,
   MemberSummary,
   Transaction,
@@ -16,6 +17,7 @@ export type {
   MemberDetail,
   Transaction,
   Loan,
+  LoanPayment,
   DepositRequest,
 };
 
@@ -86,7 +88,6 @@ export function useGetAllMembers() {
       const adminId = getStoredAdminId();
       const res = await (actor as any).getAllMembers(adminId);
       if (res.__kind__ === "ok") return res.ok;
-      // Throw the error so it surfaces instead of silently returning empty
       throw new Error(res.err ?? "Failed to load members");
     },
     enabled: !!actor,
@@ -179,6 +180,40 @@ export function useGetMemberDetail(userId: string) {
       );
       if (res.__kind__ === "ok") return res.ok;
       return null;
+    },
+    enabled: !!actor && !isFetching && !!userId,
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+}
+
+export function useGetLoanPayments(loanId: string) {
+  const { actor, isFetching } = useActor();
+  return useQuery<LoanPayment[]>({
+    queryKey: ["loanPayments", loanId],
+    queryFn: async () => {
+      if (!actor || !loanId) return [];
+      const extActor = actor as unknown as ExtendedBackendInterface;
+      const res = await extActor.getLoanPayments(loanId);
+      if (res.__kind__ === "ok") return res.ok;
+      return [];
+    },
+    enabled: !!actor && !isFetching && !!loanId,
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+}
+
+export function useGetMyLoanPayments(userId: string) {
+  const { actor, isFetching } = useActor();
+  return useQuery<LoanPayment[]>({
+    queryKey: ["myLoanPayments", userId],
+    queryFn: async () => {
+      if (!actor || !userId) return [];
+      const extActor = actor as unknown as ExtendedBackendInterface;
+      const res = await extActor.getMyLoanPayments(userId);
+      if (res.__kind__ === "ok") return res.ok;
+      return [];
     },
     enabled: !!actor && !isFetching && !!userId,
     staleTime: 0,
@@ -316,6 +351,30 @@ export function useRequestLoan() {
   });
 }
 
+export function useMakeRepayment() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      loanId,
+      amount,
+    }: { userId: string; loanId: string; amount: bigint }) => {
+      if (!actor) throw new Error("No actor");
+      const extActor = actor as unknown as ExtendedBackendInterface;
+      const res = await extActor.makeRepayment(userId, loanId, amount);
+      if (res.__kind__ === "err") throw new Error(res.err);
+      return res.ok;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["loans", vars.userId] });
+      qc.invalidateQueries({ queryKey: ["loanPayments", vars.loanId] });
+      qc.invalidateQueries({ queryKey: ["myLoanPayments", vars.userId] });
+      qc.invalidateQueries({ queryKey: ["memberDetail"] });
+    },
+  });
+}
+
 export function useAddMember() {
   const { actor } = useActor();
   const qc = useQueryClient();
@@ -404,6 +463,7 @@ export function useMarkLoanPaid() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["memberDetail"] });
+      qc.invalidateQueries({ queryKey: ["loanPayments"] });
     },
   });
 }

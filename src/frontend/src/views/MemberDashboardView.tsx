@@ -23,6 +23,7 @@ import {
   LogOut,
   Phone,
   PiggyBank,
+  Smartphone,
   TrendingUp,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -63,6 +64,7 @@ export function MemberDashboardView({ user, onLogout, onNavigate }: Props) {
   const [depositAmount, setDepositAmount] = useState("");
   const [loanAmount, setLoanAmount] = useState("");
   const [notifOpen, setNotifOpen] = useState(false);
+  const [installDialogOpen, setInstallDialogOpen] = useState(false);
 
   // Mobile money flow state
   const [depositStep, setDepositStep] = useState<DepositStep>("amount");
@@ -87,9 +89,12 @@ export function MemberDashboardView({ user, onLogout, onNavigate }: Props) {
   }, []);
 
   const handleInstall = async () => {
-    if (!installPrompt) return;
-    installPrompt.prompt();
-    setInstallPrompt(null);
+    if (installPrompt) {
+      installPrompt.prompt();
+      setInstallPrompt(null);
+    } else {
+      setInstallDialogOpen(true);
+    }
   };
 
   const savings = profile ? profile.savings : BigInt(user.savings);
@@ -340,6 +345,27 @@ export function MemberDashboardView({ user, onLogout, onNavigate }: Props) {
           </div>
           <ArrowRight className="w-4 h-4 text-muted-foreground" />
         </a>
+
+        {/* ─── INSTALL APP CARD ─── */}
+        <button
+          type="button"
+          onClick={handleInstall}
+          className="w-full flex items-center gap-3 bg-card rounded-xl p-4 shadow-card hover:shadow-card-md transition text-left"
+          data-ocid="member.link"
+        >
+          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <Smartphone className="w-5 h-5 text-primary" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-foreground">
+              Download App
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Install TogetherAsOne on your phone
+            </p>
+          </div>
+          <ArrowRight className="w-4 h-4 text-muted-foreground" />
+        </button>
 
         <Card className="shadow-card border-0" data-ocid="member.card">
           <CardContent className="pt-4">
@@ -697,6 +723,60 @@ export function MemberDashboardView({ user, onLogout, onNavigate }: Props) {
                 Submit Request
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── INSTALL APP DIALOG ─── */}
+      <Dialog open={installDialogOpen} onOpenChange={setInstallDialogOpen}>
+        <DialogContent
+          className="max-w-[90vw] rounded-2xl"
+          data-ocid="member.dialog"
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Smartphone className="w-5 h-5 text-primary" />
+              Install TogetherAsOne
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-1">
+            <div className="bg-muted rounded-xl p-4 space-y-3">
+              <div>
+                <p className="text-sm font-bold text-foreground mb-1">
+                  Android (Chrome)
+                </p>
+                <ol className="text-xs text-muted-foreground space-y-1 list-decimal pl-4">
+                  <li>Open this app in Chrome browser</li>
+                  <li>Tap the 3-dot menu (⋮) at the top right</li>
+                  <li>Tap "Add to Home Screen"</li>
+                  <li>Tap "Install"</li>
+                </ol>
+              </div>
+              <Separator />
+              <div>
+                <p className="text-sm font-bold text-foreground mb-1">
+                  iPhone (Safari)
+                </p>
+                <ol className="text-xs text-muted-foreground space-y-1 list-decimal pl-4">
+                  <li>Open this app in Safari browser</li>
+                  <li>Tap the Share button (box with arrow ↑)</li>
+                  <li>Scroll down and tap "Add to Home Screen"</li>
+                  <li>Tap "Add"</li>
+                </ol>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground text-center">
+              Once installed, TogetherAsOne opens like a native app — full
+              screen with no browser bar.
+            </p>
+            <Button
+              type="button"
+              className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={() => setInstallDialogOpen(false)}
+              data-ocid="member.confirm_button"
+            >
+              Got it
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

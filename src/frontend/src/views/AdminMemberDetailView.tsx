@@ -17,10 +17,12 @@ import {
   ArrowDownCircle,
   ArrowLeft,
   CheckCircle,
+  CheckCircle2,
   CreditCard,
   Loader2,
   PiggyBank,
   RotateCcw,
+  TrendingDown,
   XCircle,
 } from "lucide-react";
 import { useState } from "react";
@@ -29,6 +31,7 @@ import { LoanStatus } from "../backend.d";
 import {
   useAdminDeposit,
   useApproveLoan,
+  useGetLoanPayments,
   useGetMemberDetail,
   useMarkLoanPaid,
   useRejectLoan,
@@ -52,7 +55,7 @@ function LoanBadge({ status }: { status: LoanStatus }) {
     case LoanStatus.approved:
       return (
         <Badge className="bg-success/10 text-success border-0 text-xs">
-          Approved
+          Active
         </Badge>
       );
     case LoanStatus.rejected:
@@ -64,7 +67,7 @@ function LoanBadge({ status }: { status: LoanStatus }) {
     case LoanStatus.paid:
       return (
         <Badge className="bg-muted text-muted-foreground border-0 text-xs">
-          Paid
+          Cleared
         </Badge>
       );
     default:
@@ -74,6 +77,100 @@ function LoanBadge({ status }: { status: LoanStatus }) {
         </Badge>
       );
   }
+}
+
+function LoanRepaymentDetails({
+  loanId,
+  totalDue,
+  status,
+  onMarkPaid,
+  isMarkingPaid,
+}: {
+  loanId: string;
+  totalDue: bigint;
+  status: LoanStatus;
+  onMarkPaid: () => void;
+  isMarkingPaid: boolean;
+}) {
+  const { data: payments } = useGetLoanPayments(loanId);
+
+  const paidTotal = (payments ?? []).reduce(
+    (sum, p) => sum + p.amount,
+    BigInt(0),
+  );
+  const remaining = totalDue > paidTotal ? totalDue - paidTotal : BigInt(0);
+  const pct =
+    totalDue > 0
+      ? Math.min(100, Math.round((Number(paidTotal) / Number(totalDue)) * 100))
+      : 0;
+
+  return (
+    <div className="mt-3 space-y-2 border-t pt-3">
+      <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+        <TrendingDown className="w-3 h-3" /> Repayment Progress
+      </p>
+      <div className="flex justify-between text-xs">
+        <span className="text-muted-foreground">Paid so far</span>
+        <span className="font-semibold text-success">
+          {formatAmount(paidTotal)}
+        </span>
+      </div>
+      <div className="w-full bg-muted rounded-full h-2">
+        <div
+          className="bg-success h-2 rounded-full transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <div className="flex justify-between text-xs">
+        <span className="text-muted-foreground">Outstanding</span>
+        <span className="font-semibold text-destructive">
+          {formatAmount(remaining)}
+        </span>
+      </div>
+
+      {payments && payments.length > 0 && (
+        <div className="mt-1 space-y-1">
+          <p className="text-[11px] font-medium text-muted-foreground">
+            Payment records:
+          </p>
+          {payments.map((p) => (
+            <div key={p.id} className="flex justify-between text-xs">
+              <span className="text-muted-foreground">
+                {formatDate(p.timestamp)}
+              </span>
+              <span className="font-medium text-success">
+                +{formatAmount(p.amount)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {status === LoanStatus.approved && (
+        <Button
+          size="sm"
+          className="w-full h-7 text-xs mt-1 bg-primary text-primary-foreground hover:bg-primary/90"
+          onClick={onMarkPaid}
+          disabled={isMarkingPaid}
+          data-ocid="admin_detail.primary_button"
+        >
+          {isMarkingPaid ? (
+            <Loader2 className="w-3 h-3 animate-spin mr-1" />
+          ) : (
+            <CheckCircle2 className="w-3 h-3 mr-1" />
+          )}
+          Mark as Cleared
+        </Button>
+      )}
+
+      {status === LoanStatus.paid && (
+        <div className="flex items-center gap-1.5 text-xs text-success font-medium mt-1">
+          <CheckCircle2 className="w-3.5 h-3.5" />
+          Fully cleared
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function AdminMemberDetailView({ memberId, onBack }: Props) {
@@ -108,7 +205,7 @@ export function AdminMemberDetailView({ memberId, onBack }: Props) {
   const handleMarkPaid = async (loanId: string) => {
     try {
       await markPaidMutation.mutateAsync(loanId);
-      toast.success("Loan marked as paid!");
+      toast.success("Loan marked as cleared!");
     } catch (e: any) {
       toast.error(e.message ?? "Failed");
     }
@@ -278,62 +375,74 @@ export function AdminMemberDetailView({ memberId, onBack }: Props) {
               </div>
             ) : (
               <div className="space-y-2">
-                {detail.loans.map((loan, i) => (
-                  <Card
-                    key={loan.id}
-                    className="border-0 shadow-card"
-                    data-ocid={`admin_detail.item.${i + 1}`}
-                  >
-                    <CardContent className="pt-3 pb-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <div>
-                          <p className="text-xs font-semibold">
-                            {formatDate(loan.timestamp)}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatAmount(loan.amount)} +{" "}
-                            {formatAmount(loan.interest)} interest
-                          </p>
+                {detail.loans.map((loan, i) => {
+                  const totalDue = loan.amount + loan.interest;
+                  return (
+                    <Card
+                      key={loan.id}
+                      className="border-0 shadow-card"
+                      data-ocid={`admin_detail.item.${i + 1}`}
+                    >
+                      <CardContent className="pt-3 pb-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <p className="text-xs font-semibold">
+                              {formatDate(loan.timestamp)}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatAmount(loan.amount)} +{" "}
+                              {formatAmount(loan.interest)} interest
+                            </p>
+                          </div>
+                          <LoanBadge status={loan.status} />
                         </div>
-                        <LoanBadge status={loan.status} />
-                      </div>
-                      {loan.status === LoanStatus.pending && (
-                        <div className="flex gap-2 mt-2">
-                          <Button
-                            size="sm"
-                            className="flex-1 h-7 text-xs bg-success/10 text-success hover:bg-success/20 border-0"
-                            onClick={() => handleApprove(loan.id)}
-                            disabled={approveMutation.isPending}
-                            data-ocid="admin_detail.confirm_button"
-                          >
-                            <CheckCircle className="w-3 h-3 mr-1" /> Approve
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="flex-1 h-7 text-xs text-destructive border-destructive hover:bg-destructive hover:text-white"
-                            onClick={() => handleReject(loan.id)}
-                            disabled={rejectMutation.isPending}
-                            data-ocid="admin_detail.cancel_button"
-                          >
-                            <XCircle className="w-3 h-3 mr-1" /> Reject
-                          </Button>
+                        <div className="flex justify-between text-xs border-t pt-1.5">
+                          <span className="text-muted-foreground">
+                            Total Due
+                          </span>
+                          <span className="font-bold text-primary">
+                            {formatAmount(totalDue)}
+                          </span>
                         </div>
-                      )}
-                      {loan.status === LoanStatus.approved && (
-                        <Button
-                          size="sm"
-                          className="w-full h-7 text-xs mt-2 bg-primary text-primary-foreground hover:bg-primary/90"
-                          onClick={() => handleMarkPaid(loan.id)}
-                          disabled={markPaidMutation.isPending}
-                          data-ocid="admin_detail.primary_button"
-                        >
-                          <CreditCard className="w-3 h-3 mr-1" /> Mark as Paid
-                        </Button>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
+
+                        {loan.status === LoanStatus.pending && (
+                          <div className="flex gap-2 mt-2">
+                            <Button
+                              size="sm"
+                              className="flex-1 h-7 text-xs bg-success/10 text-success hover:bg-success/20 border-0"
+                              onClick={() => handleApprove(loan.id)}
+                              disabled={approveMutation.isPending}
+                              data-ocid="admin_detail.confirm_button"
+                            >
+                              <CheckCircle className="w-3 h-3 mr-1" /> Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 h-7 text-xs text-destructive border-destructive hover:bg-destructive hover:text-white"
+                              onClick={() => handleReject(loan.id)}
+                              disabled={rejectMutation.isPending}
+                              data-ocid="admin_detail.cancel_button"
+                            >
+                              <XCircle className="w-3 h-3 mr-1" /> Reject
+                            </Button>
+                          </div>
+                        )}
+
+                        {(loan.status === LoanStatus.approved ||
+                          loan.status === LoanStatus.paid) && (
+                          <LoanRepaymentDetails
+                            loanId={loan.id}
+                            totalDue={totalDue}
+                            status={loan.status}
+                            onMarkPaid={() => handleMarkPaid(loan.id)}
+                            isMarkingPaid={markPaidMutation.isPending}
+                          />
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </div>
