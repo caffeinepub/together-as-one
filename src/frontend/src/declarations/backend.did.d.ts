@@ -147,7 +147,10 @@ export interface _SERVICE {
     { 'ok' : Array<Transaction> } | { 'err' : string }
   >,
   'getTotalSavings' : ActorMethod<[string], { 'ok' : bigint } | { 'err' : string }>,
-  'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
+  'getUserProfile' : ActorMethod<
+    [Principal],
+    [] | [UserProfile]
+  >,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'login' : ActorMethod<[string, string], { 'ok' : User } | { 'err' : string }>,
   'markLoanPaid' : ActorMethod<[string, string], { 'ok' : Loan } | { 'err' : string }>,
@@ -170,6 +173,8 @@ export interface _SERVICE {
     { 'ok' : Loan } | { 'err' : string }
   >,
   'resetMember' : ActorMethod<[string, string], { 'ok' : string } | { 'err' : string }>,
+  'resetMemberPassword' : ActorMethod<[string, string, string], { 'ok' : string } | { 'err' : string }>,
+  'changePassword' : ActorMethod<[string, string, string], { 'ok' : string } | { 'err' : string }>,
   'makeRepayment' : ActorMethod<[string, string, bigint], { 'ok' : LoanPayment } | { 'err' : string }>,
   'getLoanPayments' : ActorMethod<[string], { 'ok' : Array<LoanPayment> } | { 'err' : string }>,
   'getMyLoanPayments' : ActorMethod<[string], { 'ok' : Array<LoanPayment> } | { 'err' : string }>,

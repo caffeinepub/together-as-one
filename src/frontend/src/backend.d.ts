@@ -136,6 +136,8 @@ export interface backendInterface {
     removeMember(adminId: string, userId: string): Promise<{ __kind__: "ok"; ok: string } | { __kind__: "err"; err: string }>;
     requestLoan(userId: string, amount: bigint): Promise<{ __kind__: "ok"; ok: Loan } | { __kind__: "err"; err: string }>;
     resetMember(adminId: string, userId: string): Promise<{ __kind__: "ok"; ok: string } | { __kind__: "err"; err: string }>;
+    resetMemberPassword(adminId: string, memberId: string, newPassword: string): Promise<{ __kind__: "ok"; ok: string } | { __kind__: "err"; err: string }>;
+    changePassword(userId: string, currentPassword: string, newPassword: string): Promise<{ __kind__: "ok"; ok: string } | { __kind__: "err"; err: string }>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     makeRepayment(userId: string, loanId: string, amount: bigint): Promise<{ __kind__: "ok"; ok: LoanPayment } | { __kind__: "err"; err: string }>;
     getLoanPayments(loanId: string): Promise<{ __kind__: "ok"; ok: Array<LoanPayment> } | { __kind__: "err"; err: string }>;

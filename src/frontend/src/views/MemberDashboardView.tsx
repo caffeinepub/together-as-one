@@ -18,7 +18,10 @@ import {
   Clock,
   CreditCard,
   Download,
+  Eye,
+  EyeOff,
   FileText,
+  KeyRound,
   Loader2,
   LogOut,
   Phone,
@@ -29,6 +32,7 @@ import {
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { NotificationPanel } from "../components/NotificationPanel";
+import { useActor } from "../hooks/useActor";
 import { addNotification, useNotifications } from "../hooks/useNotifications";
 import {
   useGetMyProfile,
@@ -65,6 +69,15 @@ export function MemberDashboardView({ user, onLogout, onNavigate }: Props) {
   const [loanAmount, setLoanAmount] = useState("");
   const [notifOpen, setNotifOpen] = useState(false);
   const [installDialogOpen, setInstallDialogOpen] = useState(false);
+  const [changePwOpen, setChangePwOpen] = useState(false);
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmNewPw, setConfirmNewPw] = useState("");
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPwM, setShowNewPwM] = useState(false);
+  const [showConfirmPwM, setShowConfirmPwM] = useState(false);
+  const [changePwLoading, setChangePwLoading] = useState(false);
+  const { actor } = useActor();
 
   // Mobile money flow state
   const [depositStep, setDepositStep] = useState<DepositStep>("amount");
@@ -103,6 +116,38 @@ export function MemberDashboardView({ user, onLogout, onNavigate }: Props) {
   const loanAmountNum = Number.parseFloat(loanAmount) || 0;
   const interest = loanAmountNum * 0.1;
   const totalRepay = loanAmountNum + interest;
+
+  const handleChangePassword = async () => {
+    if (newPw.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    if (newPw !== confirmNewPw) {
+      toast.error("Passwords do not match");
+      return;
+    }
+    setChangePwLoading(true);
+    try {
+      const res = await (actor as any).changePassword(
+        user.id,
+        currentPw,
+        newPw,
+      );
+      if (res.__kind__ === "ok") {
+        toast.success("Password changed successfully");
+        setChangePwOpen(false);
+        setCurrentPw("");
+        setNewPw("");
+        setConfirmNewPw("");
+      } else {
+        toast.error(res.err ?? "Failed to change password");
+      }
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to change password");
+    } finally {
+      setChangePwLoading(false);
+    }
+  };
 
   const resetDepositDialog = () => {
     setDepositStep("amount");
@@ -210,6 +255,14 @@ export function MemberDashboardView({ user, onLogout, onNavigate }: Props) {
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setChangePwOpen(true)}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition"
+            data-ocid="member.open_modal_button"
+          >
+            <KeyRound className="w-4 h-4" /> Password
           </button>
           <button
             type="button"
@@ -776,6 +829,123 @@ export function MemberDashboardView({ user, onLogout, onNavigate }: Props) {
               data-ocid="member.confirm_button"
             >
               Got it
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Password Dialog */}
+      <Dialog
+        open={changePwOpen}
+        onOpenChange={(o) => {
+          setChangePwOpen(o);
+          if (!o) {
+            setCurrentPw("");
+            setNewPw("");
+            setConfirmNewPw("");
+          }
+        }}
+      >
+        <DialogContent data-ocid="member.dialog">
+          <DialogHeader>
+            <DialogTitle>Change Password</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label htmlFor="cur-pw">Current Password</Label>
+              <div className="relative mt-1">
+                <Input
+                  id="cur-pw"
+                  type={showCurrentPw ? "text" : "password"}
+                  placeholder="Enter current password"
+                  value={currentPw}
+                  onChange={(e) => setCurrentPw(e.target.value)}
+                  data-ocid="member.input"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPw((p) => !p)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+                >
+                  {showCurrentPw ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="new-pw-m">New Password</Label>
+              <div className="relative mt-1">
+                <Input
+                  id="new-pw-m"
+                  type={showNewPwM ? "text" : "password"}
+                  placeholder="At least 6 characters"
+                  value={newPw}
+                  onChange={(e) => setNewPw(e.target.value)}
+                  data-ocid="member.input"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPwM((p) => !p)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+                >
+                  {showNewPwM ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="confirm-pw-m">Confirm New Password</Label>
+              <div className="relative mt-1">
+                <Input
+                  id="confirm-pw-m"
+                  type={showConfirmPwM ? "text" : "password"}
+                  placeholder="Re-enter new password"
+                  value={confirmNewPw}
+                  onChange={(e) => setConfirmNewPw(e.target.value)}
+                  data-ocid="member.input"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPwM((p) => !p)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+                >
+                  {showConfirmPwM ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setChangePwOpen(false)}
+              data-ocid="member.cancel_button"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleChangePassword}
+              disabled={
+                changePwLoading || !currentPw || !newPw || !confirmNewPw
+              }
+              style={{ background: "#0B4A37" }}
+              data-ocid="member.submit_button"
+            >
+              {changePwLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <KeyRound className="w-4 h-4 mr-2" />
+              )}
+              Change Password
             </Button>
           </div>
         </DialogContent>

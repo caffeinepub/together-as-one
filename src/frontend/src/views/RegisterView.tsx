@@ -40,7 +40,11 @@ export function RegisterView({ onLogin, onNavigate }: Props) {
     }
     setLoading(true);
     try {
-      const res = await actor.register(name, email, password);
+      const res = await actor.register(
+        name.trim(),
+        email.trim().toLowerCase(),
+        password,
+      );
       if (res.__kind__ === "ok") {
         toast.success("Account created! Welcome to the group.");
         onLogin(userToStored(res.ok));

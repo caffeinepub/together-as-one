@@ -80,29 +80,21 @@ actor {
   func generateContributionId() : Text { let id = nextContributionId.toText(); nextContributionId += 1; "mc" # id };
   func generateBroadcastId() : Text { let id = nextBroadcastId.toText(); nextBroadcastId += 1; "bn" # id };
 
+  // Always scan all users by email — never rely solely on the index.
+  // This ensures login works even if the index is stale or corrupted.
   func getUserByEmail(email : Text) : ?User {
-    switch (emailToUserId.get(email)) {
-      case (?uid) {
-        switch (users.get(uid)) {
-          case (?u) ?u;
-          case null {
-            var found : ?User = null;
-            for (u in users.values()) { if (u.email == email) { found := ?u } };
-            found
-          };
-        };
-      };
-      case null {
-        var found : ?User = null;
-        for (u in users.values()) { if (u.email == email) { found := ?u } };
-        switch (found) {
-          case (?u) { emailToUserId.remove(email); emailToUserId.add(email, u.id) };
-          case null {};
-        };
-        found
-      };
+    var found : ?User = null;
+    for (u in users.values()) {
+      if (u.email == email) { found := ?u };
     };
+    // Repair the index while we're here
+    switch (found) {
+      case (?u) { emailToUserId.remove(email); emailToUserId.add(email, u.id) };
+      case null {};
+    };
+    found
   };
+
   func getUserById(uid : Text) : ?User { users.get(uid) };
   func isAdminById(uid : Text) : Bool {
     if (uid == ADMIN_FIXED_ID) return true;
@@ -187,20 +179,22 @@ actor {
   // ────────────────────────────────────────────────────────────────────────
 
   public shared func register(name : Text, email : Text, password : Text) : async { #ok : User; #err : Text } {
-    if (email == ADMIN_EMAIL) return #err("This email is reserved");
-    switch (getUserByEmail(email)) {
+    let trimmedEmail = email; // email should be pre-trimmed by frontend
+    if (trimmedEmail == ADMIN_EMAIL) return #err("This email is reserved");
+    switch (getUserByEmail(trimmedEmail)) {
       case (?_) return #err("Email already registered");
       case null {};
     };
     let uid = generateUserId();
-    let u : User = { id = uid; name = name; email = email; passwordHash = hashPassword(password); role = "member"; savings = 0; lastLogin = Time.now() };
+    let u : User = { id = uid; name = name; email = trimmedEmail; passwordHash = hashPassword(password); role = "member"; savings = 0; lastLogin = Time.now() };
     users.add(uid, u);
-    emailToUserId.add(email, uid);
+    emailToUserId.add(trimmedEmail, uid);
     #ok(u);
   };
 
   public shared ({ caller }) func login(email : Text, password : Text) : async { #ok : User; #err : Text } {
-    if (email == ADMIN_EMAIL) {
+    let trimmedEmail = email;
+    if (trimmedEmail == ADMIN_EMAIL) {
       if (password != ADMIN_PASSWORD) return #err("Invalid password");
       let existingSavings : Nat = switch (users.get(ADMIN_FIXED_ID)) { case (?u) u.savings; case null 0 };
       let now = Time.now();
@@ -215,12 +209,19 @@ actor {
       principalToUserId.remove(caller); principalToUserId.add(caller, ADMIN_FIXED_ID);
       return #ok(admin);
     };
-    switch (getUserByEmail(email)) {
-      case null return #err("User not found");
+    // Always scan all users for the email — never rely solely on index
+    var foundUser : ?User = null;
+    for (u in users.values()) {
+      if (u.email == trimmedEmail) { foundUser := ?u };
+    };
+    switch (foundUser) {
+      case null return #err("User not found. Please register first or check your email address.");
       case (?user) {
         if (user.passwordHash != hashPassword(password)) return #err("Invalid password");
         let updated : User = { id = user.id; name = user.name; email = user.email; passwordHash = user.passwordHash; role = user.role; savings = user.savings; lastLogin = Time.now() };
         users.remove(user.id); users.add(user.id, updated);
+        // Repair the email index
+        emailToUserId.remove(user.email); emailToUserId.add(user.email, user.id);
         principalToUserId.remove(caller); principalToUserId.add(caller, user.id);
         #ok(updated);
       };
@@ -576,6 +577,32 @@ actor {
       };
     };
   };
+
+  public shared func resetMemberPassword(adminUserId : Text, memberId : Text, newPassword : Text) : async { #ok : Text; #err : Text } {
+    if (not isAdminById(adminUserId)) return #err("Unauthorized");
+    if (memberId == ADMIN_FIXED_ID) return #err("Cannot reset admin password this way");
+    switch (getUserById(memberId)) {
+      case null return #err("Member not found");
+      case (?user) {
+        let updated : User = { id = user.id; name = user.name; email = user.email; passwordHash = hashPassword(newPassword); role = user.role; savings = user.savings; lastLogin = user.lastLogin };
+        users.remove(memberId); users.add(memberId, updated);
+        #ok("Password reset successfully");
+      };
+    };
+  };
+
+  public shared func changePassword(userId : Text, currentPassword : Text, newPassword : Text) : async { #ok : Text; #err : Text } {
+    switch (getUserById(userId)) {
+      case null return #err("User not found");
+      case (?user) {
+        if (user.passwordHash != hashPassword(currentPassword)) return #err("Current password is incorrect");
+        let updated : User = { id = user.id; name = user.name; email = user.email; passwordHash = hashPassword(newPassword); role = user.role; savings = user.savings; lastLogin = user.lastLogin };
+        users.remove(userId); users.add(userId, updated);
+        #ok("Password changed successfully");
+      };
+    };
+  };
+
 
   public query func getTotalSavings(adminUserId : Text) : async { #ok : Nat; #err : Text } {
     if (not isAdminById(adminUserId)) return #err("Unauthorized");

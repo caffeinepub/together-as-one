@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Clock,
   Download,
+  FileDown,
   FileText,
   LogOut,
   Send,
@@ -50,6 +51,19 @@ function getStoredAdminId(): string {
   }
 }
 
+function downloadCSV(filename: string, rows: string[][]) {
+  const csv = rows
+    .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function AdminDashboardView({ user, onLogout, onNavigate }: Props) {
   const { data: members } = useGetAllMembers();
   const { data: totalSavings } = useGetTotalSavings();
@@ -61,7 +75,6 @@ export function AdminDashboardView({ user, onLogout, onNavigate }: Props) {
   const { unreadCount, requestPermission } = useNotifications(user.id);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
 
-  // Broadcast notification dialog state
   const [broadcastOpen, setBroadcastOpen] = useState(false);
   const [broadcastTitle, setBroadcastTitle] = useState("");
   const [broadcastBody, setBroadcastBody] = useState("");
@@ -118,6 +131,29 @@ export function AdminDashboardView({ user, onLogout, onNavigate }: Props) {
     }
   };
 
+  const handleGroupStatement = () => {
+    const list = members ?? [];
+    if (list.length === 0) {
+      toast.info("No members to export yet.");
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const filename = `TogetherAsOne-Group-Summary-${today}.csv`;
+    const rows: string[][] = [
+      ["Member Name", "Email", "Total Savings (KES)", "Loan Count"],
+    ];
+    for (const m of list) {
+      rows.push([
+        m.name,
+        m.email,
+        String(Number(m.savings)),
+        String(Number(m.loanCount)),
+      ]);
+    }
+    downloadCSV(filename, rows);
+    toast.success("Group summary downloaded!");
+  };
+
   const stats = [
     {
       label: "Total Members",
@@ -128,7 +164,7 @@ export function AdminDashboardView({ user, onLogout, onNavigate }: Props) {
     },
     {
       label: "Group Savings",
-      value: totalSavings != null ? formatAmount(totalSavings) : "—",
+      value: totalSavings != null ? formatAmount(totalSavings) : "\u2014",
       icon: TrendingUp,
       color: "text-accent",
       bg: "bg-accent/10",
@@ -287,7 +323,26 @@ export function AdminDashboardView({ user, onLogout, onNavigate }: Props) {
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
           </button>
 
-          {/* Send Notification to All Members */}
+          <button
+            type="button"
+            className="w-full bg-card rounded-xl px-4 py-4 shadow-card flex items-center justify-between hover:shadow-card-md transition"
+            onClick={handleGroupStatement}
+            data-ocid="admin.primary_button"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
+                <FileDown className="w-4 h-4 text-primary" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-semibold">Group Statement</p>
+                <p className="text-xs text-muted-foreground">
+                  Download member summary as CSV
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          </button>
+
           <button
             type="button"
             className="w-full bg-card rounded-xl px-4 py-4 shadow-card flex items-center justify-between hover:shadow-card-md transition"
@@ -317,7 +372,7 @@ export function AdminDashboardView({ user, onLogout, onNavigate }: Props) {
                 "_blank",
               )
             }
-            data-ocid="admin.primary_button"
+            data-ocid="admin.link"
           >
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center">
@@ -355,7 +410,6 @@ export function AdminDashboardView({ user, onLogout, onNavigate }: Props) {
         </div>
       </main>
 
-      {/* Broadcast Notification Dialog */}
       <Dialog open={broadcastOpen} onOpenChange={setBroadcastOpen}>
         <DialogContent className="max-w-sm mx-auto">
           <DialogHeader>
@@ -414,14 +468,12 @@ export function AdminDashboardView({ user, onLogout, onNavigate }: Props) {
         </DialogContent>
       </Dialog>
 
-      {/* NOTIFICATION PANEL */}
       <NotificationPanel
         userId={user.id}
         open={notifOpen}
         onClose={() => setNotifOpen(false)}
       />
 
-      {/* PWA Install Banner */}
       {installPrompt && (
         <div className="fixed bottom-16 left-4 right-4 z-50">
           <div
@@ -443,7 +495,7 @@ export function AdminDashboardView({ user, onLogout, onNavigate }: Props) {
               size="sm"
               onClick={handleInstall}
               className="h-8 text-xs bg-white text-primary hover:bg-white/90 font-semibold shrink-0"
-              data-ocid="admin.primary_button"
+              data-ocid="admin.secondary_button"
             >
               Install
             </Button>
@@ -453,14 +505,14 @@ export function AdminDashboardView({ user, onLogout, onNavigate }: Props) {
               className="text-white/60 hover:text-white text-lg leading-none shrink-0"
               aria-label="Dismiss"
             >
-              ×
+              &times;
             </button>
           </div>
         </div>
       )}
 
       <footer className="text-center py-3 text-xs text-muted-foreground">
-        © {new Date().getFullYear()}. Built with ❤️ using{" "}
+        &copy; {new Date().getFullYear()}. Built with ❤️ using{" "}
         <a
           href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
           target="_blank"

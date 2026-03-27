@@ -4,12 +4,17 @@ import {
   ArrowDownCircle,
   ArrowLeft,
   Clock,
+  FileDown,
   Loader2,
   XCircle,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
+  useGetMyContributions,
   useGetMyDepositRequests,
+  useGetMyLoanPayments,
   useGetMyTransactions,
+  useGetMyWithdrawalRequests,
 } from "../hooks/useQueries";
 import { formatAmount, formatDate } from "../types";
 
@@ -28,13 +33,37 @@ type CombinedItem =
       status: string;
     };
 
+function downloadCSV(filename: string, rows: string[][]) {
+  const csv = rows
+    .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function tsToDateStr(ts: bigint): string {
+  return new Date(Number(ts) / 1_000_000).toLocaleDateString("en-KE");
+}
+
 export function TransactionHistoryView({ userId, onBack }: Props) {
   const { data: transactions, isLoading: txLoading } =
     useGetMyTransactions(userId);
   const { data: depositRequests, isLoading: reqLoading } =
     useGetMyDepositRequests(userId);
+  const { data: loanPayments, isLoading: lpLoading } =
+    useGetMyLoanPayments(userId);
+  const { data: withdrawalRequests, isLoading: wrLoading } =
+    useGetMyWithdrawalRequests(userId);
+  const { data: contributions, isLoading: contribLoading } =
+    useGetMyContributions(userId);
 
-  const isLoading = txLoading || reqLoading;
+  const isLoading =
+    txLoading || reqLoading || lpLoading || wrLoading || contribLoading;
 
   const combined: CombinedItem[] = [
     ...(transactions ?? []).map(
@@ -58,6 +87,83 @@ export function TransactionHistoryView({ userId, onBack }: Props) {
       ),
   ].sort((a, b) => (b.timestamp > a.timestamp ? 1 : -1));
 
+  const handleDownload = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const filename = `TogetherAsOne-Statement-${today}.csv`;
+    const rows: string[][] = [
+      ["Date", "Type", "Description", "Amount (KES)", "Status"],
+    ];
+
+    for (const tx of (transactions ?? []).sort((a, b) =>
+      a.timestamp < b.timestamp ? -1 : 1,
+    )) {
+      rows.push([
+        tsToDateStr(tx.timestamp),
+        "Deposit",
+        "Confirmed deposit",
+        String(Number(tx.amount)),
+        "Approved",
+      ]);
+    }
+
+    for (const r of (depositRequests ?? []).sort((a, b) =>
+      a.timestamp < b.timestamp ? -1 : 1,
+    )) {
+      if (r.status === "approved") continue;
+      rows.push([
+        tsToDateStr(r.timestamp),
+        "Deposit Request",
+        "M-Pesa / Airtel deposit",
+        String(Number(r.amount)),
+        r.status.charAt(0).toUpperCase() + r.status.slice(1),
+      ]);
+    }
+
+    for (const lp of (loanPayments ?? []).sort((a, b) =>
+      a.timestamp < b.timestamp ? -1 : 1,
+    )) {
+      rows.push([
+        tsToDateStr(lp.timestamp),
+        "Loan Repayment",
+        `Repayment for loan ${lp.loanId.slice(0, 8)}`,
+        String(Number(lp.amount)),
+        "Completed",
+      ]);
+    }
+
+    for (const wr of (withdrawalRequests ?? []).sort((a, b) =>
+      a.timestamp < b.timestamp ? -1 : 1,
+    )) {
+      rows.push([
+        tsToDateStr(wr.timestamp),
+        "Withdrawal",
+        wr.note || "Withdrawal request",
+        String(Number(wr.amount)),
+        wr.status.charAt(0).toUpperCase() + wr.status.slice(1),
+      ]);
+    }
+
+    for (const c of (contributions ?? []).sort((a, b) =>
+      a.timestamp < b.timestamp ? -1 : 1,
+    )) {
+      rows.push([
+        tsToDateStr(c.timestamp),
+        "Monthly Contribution",
+        `Contribution for ${c.month}/${c.year}`,
+        String(Number(c.amount)),
+        "Recorded",
+      ]);
+    }
+
+    if (rows.length === 1) {
+      toast.info("No transactions to export yet.");
+      return;
+    }
+
+    downloadCSV(filename, rows);
+    toast.success("Statement downloaded!");
+  };
+
   return (
     <div className="min-h-screen flex flex-col" data-ocid="transactions.page">
       <header className="bg-card border-b px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
@@ -70,7 +176,18 @@ export function TransactionHistoryView({ userId, onBack }: Props) {
         >
           <ArrowLeft className="w-4 h-4" />
         </Button>
-        <h1 className="font-bold text-base">Transaction History</h1>
+        <h1 className="font-bold text-base flex-1">Transaction History</h1>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleDownload}
+          className="h-8 gap-1.5 text-xs border-primary text-primary hover:bg-primary/5"
+          data-ocid="transactions.primary_button"
+          disabled={isLoading}
+        >
+          <FileDown className="w-3.5 h-3.5" />
+          Export CSV
+        </Button>
       </header>
 
       <div

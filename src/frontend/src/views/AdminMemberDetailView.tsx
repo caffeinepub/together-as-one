@@ -19,6 +19,9 @@ import {
   CheckCircle,
   CheckCircle2,
   CreditCard,
+  Eye,
+  EyeOff,
+  KeyRound,
   Loader2,
   PiggyBank,
   RotateCcw,
@@ -28,6 +31,7 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { LoanStatus } from "../backend.d";
+import { useActor } from "../hooks/useActor";
 import {
   useAdminDeposit,
   useApproveLoan,
@@ -183,6 +187,13 @@ export function AdminMemberDetailView({ memberId, onBack }: Props) {
 
   const [savingsDialogOpen, setSavingsDialogOpen] = useState(false);
   const [savingsAmount, setSavingsAmount] = useState("");
+  const [resetPwDialogOpen, setResetPwDialogOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
+  const [resetPwLoading, setResetPwLoading] = useState(false);
+  const { actor } = useActor();
 
   const handleApprove = async (loanId: string) => {
     try {
@@ -217,6 +228,45 @@ export function AdminMemberDetailView({ memberId, onBack }: Props) {
       toast.success("Member account reset.");
     } catch (e: any) {
       toast.error(e.message ?? "Failed");
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+    const adminId = (() => {
+      try {
+        const s = localStorage.getItem("tao_user");
+        return s ? (JSON.parse(s) as { id: string }).id : "";
+      } catch {
+        return "";
+      }
+    })();
+    setResetPwLoading(true);
+    try {
+      const res = await (actor as any).resetMemberPassword(
+        adminId,
+        memberId,
+        newPassword,
+      );
+      if (res.__kind__ === "ok") {
+        toast.success("Password reset successfully");
+        setResetPwDialogOpen(false);
+        setNewPassword("");
+        setConfirmPassword("");
+      } else {
+        toast.error(res.err ?? "Failed to reset password");
+      }
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to reset password");
+    } finally {
+      setResetPwLoading(false);
     }
   };
 
@@ -259,6 +309,17 @@ export function AdminMemberDetailView({ memberId, onBack }: Props) {
           >
             <PiggyBank className="w-3.5 h-3.5 mr-1" />
             Add Savings
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            style={{ borderColor: "#C6A24D", color: "#C6A24D" }}
+            onClick={() => setResetPwDialogOpen(true)}
+            data-ocid="admin_detail.open_modal_button"
+          >
+            <KeyRound className="w-3.5 h-3.5 mr-1" />
+            Reset Password
           </Button>
           <Button
             variant="outline"
@@ -493,6 +554,101 @@ export function AdminMemberDetailView({ memberId, onBack }: Props) {
                 <PiggyBank className="w-4 h-4 mr-2" />
               )}
               Add Savings
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog
+        open={resetPwDialogOpen}
+        onOpenChange={(o) => {
+          setResetPwDialogOpen(o);
+          if (!o) {
+            setNewPassword("");
+            setConfirmPassword("");
+          }
+        }}
+      >
+        <DialogContent data-ocid="admin_detail.dialog">
+          <DialogHeader>
+            <DialogTitle>
+              Reset Password for {detail?.user.name ?? "Member"}
+            </DialogTitle>
+            <DialogDescription>
+              Set a new temporary password. Tell the member their new password.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label htmlFor="new-pw">New Password</Label>
+              <div className="relative mt-1">
+                <Input
+                  id="new-pw"
+                  type={showNewPw ? "text" : "password"}
+                  placeholder="At least 6 characters"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  data-ocid="admin_detail.input"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPw((p) => !p)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+                >
+                  {showNewPw ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="confirm-pw">Confirm Password</Label>
+              <div className="relative mt-1">
+                <Input
+                  id="confirm-pw"
+                  type={showConfirmPw ? "text" : "password"}
+                  placeholder="Re-enter password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  data-ocid="admin_detail.input"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPw((p) => !p)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+                >
+                  {showConfirmPw ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setResetPwDialogOpen(false)}
+              data-ocid="admin_detail.cancel_button"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleResetPassword}
+              disabled={resetPwLoading || !newPassword || !confirmPassword}
+              style={{ background: "#0B4A37" }}
+              data-ocid="admin_detail.submit_button"
+            >
+              {resetPwLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <KeyRound className="w-4 h-4 mr-2" />
+              )}
+              Reset Password
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -6,8 +6,10 @@ import type {
   LoanPayment,
   MemberDetail,
   MemberSummary,
+  MonthlyContribution,
   Transaction,
   User,
+  WithdrawalRequest,
 } from "../backend.d";
 import { useActor } from "./useActor";
 
@@ -19,6 +21,8 @@ export type {
   Loan,
   LoanPayment,
   DepositRequest,
+  WithdrawalRequest,
+  MonthlyContribution,
 };
 
 function getStoredAdminId(): string {
@@ -159,6 +163,40 @@ export function useGetMyDepositRequests(userId: string) {
       if (!actor || !userId) return [];
       const extActor = actor as unknown as ExtendedBackendInterface;
       const res = await extActor.getMyDepositRequests(userId);
+      if (res.__kind__ === "ok") return res.ok;
+      return [];
+    },
+    enabled: !!actor && !isFetching && !!userId,
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+}
+
+export function useGetMyWithdrawalRequests(userId: string) {
+  const { actor, isFetching } = useActor();
+  return useQuery<WithdrawalRequest[]>({
+    queryKey: ["withdrawalRequests", userId],
+    queryFn: async () => {
+      if (!actor || !userId) return [];
+      const extActor = actor as unknown as ExtendedBackendInterface;
+      const res = await extActor.getMyWithdrawalRequests(userId);
+      if (res.__kind__ === "ok") return res.ok;
+      return [];
+    },
+    enabled: !!actor && !isFetching && !!userId,
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+}
+
+export function useGetMyContributions(userId: string) {
+  const { actor, isFetching } = useActor();
+  return useQuery<MonthlyContribution[]>({
+    queryKey: ["contributions", userId],
+    queryFn: async () => {
+      if (!actor || !userId) return [];
+      const extActor = actor as unknown as ExtendedBackendInterface;
+      const res = await extActor.getMyContributions(userId);
       if (res.__kind__ === "ok") return res.ok;
       return [];
     },

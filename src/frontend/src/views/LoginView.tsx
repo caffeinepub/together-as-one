@@ -41,7 +41,7 @@ export function LoginView({ onLogin, onNavigate }: Props) {
     }
     setLoading(true);
     try {
-      const res = await actor.login(email, password);
+      const res = await actor.login(email.trim().toLowerCase(), password);
       if (res.__kind__ === "ok") {
         toast.success("Welcome back! Login successful.");
         onLogin(userToStored(res.ok));
@@ -133,6 +133,10 @@ export function LoginView({ onLogin, onNavigate }: Props) {
               </Button>
             </form>
 
+            <p className="text-center text-xs text-muted-foreground mt-3">
+              Forgot your password? Contact your group admin to reset it.
+            </p>
+
             <p className="text-center text-sm text-muted-foreground mt-5">
               Not a member yet?{" "}
               <button
@@ -146,15 +150,6 @@ export function LoginView({ onLogin, onNavigate }: Props) {
             </p>
           </CardContent>
         </Card>
-
-        <p className="text-center text-xs text-muted-foreground mt-6">
-          Admin? Use{" "}
-          <span className="font-mono text-xs font-semibold">
-            admin@gmail.com
-          </span>
-          {" / "}
-          <span className="font-mono text-xs font-semibold">admin123</span>
-        </p>
       </div>
 
       <footer className="text-center py-4 px-4 text-xs text-muted-foreground">
